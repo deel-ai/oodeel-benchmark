@@ -1,7 +1,9 @@
-# oodeel-benchmark
 
-Minimal, reproducible harness to benchmark **[OODeel](https://github.com/deel-ai/oodeel)** detectors on any mix of  
-_ID datasets × OOD datasets × models × feature-layer-packs × detector hparams grids_.
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/0f330118-d3b7-4b46-8674-c3a6b25a4ddf" width="40%" alt="OODeel Benchmark logo"/>
+</p>
+
+Minimal, reproducible harness to benchmark **[OODeel](https://github.com/deel-ai/oodeel)** detectors on any mix of  _ID datasets × OOD datasets × models × feature-layer-packs × detector hparams grids_.
 
 ```
 configs/                # YAML knobs (no code)
