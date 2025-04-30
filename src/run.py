@@ -1,6 +1,7 @@
 # ────────────────────────────────────────────────────────────────
 # src/run.py        •  launch with:   python -m src.run
 # ────────────────────────────────────────────────────────────────
+import argparse
 import json
 import hashlib
 import itertools
@@ -27,6 +28,7 @@ from oodeel.eval.metrics import bench_metrics
 from dataset import get_dataloader  # your helpers
 from openood_networks import get_network
 from utils import seed_everything
+
 
 # ─── paths ───────────────────────────────────────────────────────
 CFG_ROOT = Path(__file__).parent.parent / "configs"
@@ -97,10 +99,8 @@ def short_descr(run):
         f"[magenta]{run['method']}:{run['layer_pack']}[/]{agg_txt}"
     )
 
-
 def show_phase(prog, task, run, phase):
-    prog.update(task, description=f"{short_descr(run)} → {phase}", advance=0)
-
+    prog.tasks[task].description = f"{short_descr(run)} → {phase}"
 
 # ─── sweep builder ──────────────────────────────────────────────
 def build_runs():
@@ -109,15 +109,32 @@ def build_runs():
     methods_cfg = {m: load_yaml("methods", m) for m in bench_cfg["methods"]}
 
     model_cache, runs = {}, []
+    # iterate over all id datasets
     for id_ds, ds_cfg in datasets.items():
+        # iterate over all models
         for model_name in ds_cfg["models"]:
             if model_name not in model_cache:
                 model_cache[model_name] = load_yaml("models", model_name)
             model_spec = model_cache[model_name]
 
+            # iterate over all methods
             for meth_name, meth_cfg in methods_cfg.items():
                 meth_class = meth_cfg.get("class", meth_name.upper())
-                init_grid = list(grid(meth_cfg.get("init_grid", {})))
+
+                # build init grid
+                if "modes" in meth_cfg:  # manage react, ash, scale modes (e.g. ODIN)
+                    base_spec = meth_cfg.get("base", {})
+                    mode_specs = meth_cfg["modes"]
+                    init_grid = []
+                    for mode in mode_specs:
+                        for base_combo in grid(base_spec):
+                            for mode_combo in grid(mode):
+                                merged = {**base_combo, **mode_combo}
+                                init_grid.append(merged)
+                else:  # no modes
+                    init_grid = list(grid(meth_cfg.get("init_grid", {})))
+
+                # build fit grid (e.g. feature_layers_id)
                 fit_grid = meth_cfg.get("fit_grid", {})
                 layer_packs = fit_grid.get("layer_packs", ["full"])
 
@@ -125,8 +142,11 @@ def build_runs():
                     grid({k: v for k, v in fit_grid.items() if k != "layer_packs"})
                 )
 
+                # iterate over all combinations
+                # fit params
                 for pack in layer_packs:
                     layers = model_spec["layer_packs"][pack]
+                    # init params
                     for init in init_grid:
                         for fit_extra in other_fit_grid:
                             fit = {**fit_extra, "feature_layers_id": layers}
@@ -155,12 +175,36 @@ def build_runs():
     return runs
 
 
+# ─── argparse ─────────────────────────────────────────────────
+def parse_args():
+    p = argparse.ArgumentParser()
+    p.add_argument(
+        "--shard-index", type=int, default=0, help="Which shard am I (0-based)?"
+    )
+    p.add_argument("--num-shards", type=int, default=1, help="Total number of shards.")
+    return p.parse_args()
+
+
 # ─── main ────────────────────────────────────────────────────────
 def main():
+    cli = parse_args()
+
     runs = build_runs()
     console = Console()
     console.print(f"[bold cyan]👉  total runs to execute: {len(runs)}[/]")
     runs.sort(key=lambda r: r["uid"])
+
+    # keep only the runs that belong to *this* shard
+    runs = [r for i, r in enumerate(runs) if i % cli.num_shards == cli.shard_index]
+
+    console.print(
+        f"[bold yellow]Shard {cli.shard_index + 1}/{cli.num_shards}"
+        f" → {len(runs)} runs[/]"
+    )
+
+    total_ood_pairs = sum(sum(len(v) for v in r["ood_lists"].values()) for r in runs)
+
+    console.print(f"[bold green]Total OOD pairs to score: {total_ood_pairs}[/]")
 
     with Progress(
         TextColumn("[progress.description]{task.description}"),
@@ -170,20 +214,21 @@ def main():
         SpinnerColumn(speed=0.2),
         console=console,
     ) as progress:
-        task = progress.add_task("Starting…", total=len(runs))
+
+        task = progress.add_task("Starting…", total=total_ood_pairs)
 
         for run in runs:
             out_file = RESULT_DIR / f"{run['uid']}.parquet"
             expected_rows = sum(len(v) for v in run["ood_lists"].values())
 
             if run_is_complete(out_file, expected_rows):
-                progress.advance(task)
+                progress.advance(task, expected_rows)
                 continue
             if out_file.exists():  # incomplete
                 console.log(f"[yellow]Re-running incomplete uid {run['uid']}[/]")
                 out_file.unlink(missing_ok=True)
 
-            progress.update(task, description=short_descr(run))
+            progress.tasks[task].description = short_descr(run)
             seed_everything()
 
             wb = wandb.init(
@@ -313,7 +358,9 @@ def main():
                         }
                     )
 
-            progress.advance(task)
+                    progress.advance(task)
+
+            # progress.advance(task)
             wb.save(str(out_file))
             wb.finish()
 
