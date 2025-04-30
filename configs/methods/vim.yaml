@@ -3,7 +3,6 @@ class: VIM
 init_grid:
   princ_dims: [0.9, 0.95, 0.99]
   pca_origin: [center]
-  use_gpu: [True]
   aggregator: [FisherAggregator]
 
 fit_grid:
