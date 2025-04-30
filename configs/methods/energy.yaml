@@ -1,0 +1,7 @@
+class: Energy
+
+init_grid:
+  null
+
+fit_grid:
+  layer_packs: [none]

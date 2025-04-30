@@ -1,0 +1,5 @@
+# datasets:  [cifar10, cifar100, imagenet200, imagenet]
+datasets: [cifar10, cifar100]
+methods:   [energy]
+batch_size:  128
+num_workers:  8

@@ -1,0 +1,10 @@
+id_split: train
+
+# Near / far OOD lists – only for this ID dataset
+ood:
+  near: [cifar10, tin]
+  far:  [mnist, svhn, texture, places365]
+
+# Which models (and which layer packs) to try on **this** dataset
+models:
+  - resnet18

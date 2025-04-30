@@ -1,0 +1,8 @@
+architecture: resnet18            # string your utils.get_model understands
+
+# Canonical layer packs for ALL datasets that use ResNet-18
+layer_packs:
+  full:        [layer1, layer2, layer3, layer4, avgpool]
+  penultimate: [avgpool]
+  partial:     [layer3, layer4, avgpool]
+  none:        []
