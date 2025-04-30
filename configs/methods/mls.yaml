@@ -1,10 +1,10 @@
-class: Energy
+class: MLS
 
 base:
   null
 
 modes:
-  - {} # "vanilla" Energy
+  - {} # "vanilla" MLS
   - { use_react: [True], react_quantile: [0.85, 0.90, 0.95, 0.99] }
   - { use_scale: [True], scale_percentile: [0.85, 0.90, 0.95, 0.99] }
   - { use_ash: [True], ash_percentile: [0.85, 0.90, 0.95, 0.99] }

@@ -1,0 +1,11 @@
+class: Entropy
+
+base:
+  null
+
+modes:
+  - {} # "vanilla" Entropy
+  - { use_react: [True], react_quantile: [0.85, 0.90, 0.95, 0.99] }
+
+fit_grid:
+  layer_packs: [none]

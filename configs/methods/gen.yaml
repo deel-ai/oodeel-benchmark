@@ -1,10 +1,11 @@
-class: Energy
+class: GEN
 
 base:
-  null
+  gamma: [0.1]
+  k: [5, 50, 100]
 
 modes:
-  - {} # "vanilla" Energy
+  - {} # "vanilla" GEN
   - { use_react: [True], react_quantile: [0.85, 0.90, 0.95, 0.99] }
   - { use_scale: [True], scale_percentile: [0.85, 0.90, 0.95, 0.99] }
   - { use_ash: [True], ash_percentile: [0.85, 0.90, 0.95, 0.99] }

@@ -1,4 +1,4 @@
-architecture: resnet18            # string your utils.get_model understands
+architecture: resnet18
 
 # Canonical layer packs for ALL datasets that use ResNet-18
 layer_packs:

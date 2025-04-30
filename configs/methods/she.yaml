@@ -1,0 +1,8 @@
+class: SHE
+
+init_grid:
+  eps: [0.0, 0.0014]
+  aggregator: [FisherAggregator]
+
+fit_grid:
+  layer_packs: [full, partial]

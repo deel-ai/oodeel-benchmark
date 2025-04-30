@@ -1,7 +1,7 @@
-class: Mahalanobis
+class: Gram
 
 init_grid:
-  eps: [0.0, 0.002]
+  orders: [[1, 2, 3, 4, 5]]
   aggregator: [FisherAggregator]
 
 fit_grid:

@@ -1,7 +1,8 @@
-class: Mahalanobis
+class: DKNN
 
 init_grid:
-  eps: [0.0, 0.002]
+  nearest: [1, 10, 50, 100]
+  use_gpu: [True]
   aggregator: [FisherAggregator]
 
 fit_grid:
