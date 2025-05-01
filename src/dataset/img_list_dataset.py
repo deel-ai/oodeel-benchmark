@@ -101,6 +101,9 @@ class ImglistDataset(BaseDataset):
         else:
             return min(len(self.imglist), self.maxlen)
 
+    def get_labels(self):
+        return list(map(lambda x: int(x.strip("\n").split(" ", 1)[1]), self.imglist))
+
     def getitem(self, index):
         line = self.imglist[index].strip("\n")
         tokens = line.split(" ", 1)

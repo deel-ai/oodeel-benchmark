@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import torch
@@ -27,7 +26,7 @@ CHECKPOINTS_DICT = {
         }
     },
     "imagenet200": {
-        "resnet18": {
+        "resnet18_224": {
             "class": ResNet18_224x224,
             "kwargs": {"num_classes": 200},
             "ckpt_path": "models/imagenet200_resnet18_224x224_base_e90_lr0.1_default/"
@@ -44,9 +43,12 @@ CHECKPOINTS_DICT = {
 }
 
 
-def get_network(dataset_name, model_name):
+def get_network(dataset_name, model_name, device=None):
     model_dict = CHECKPOINTS_DICT[dataset_name][model_name]
     kwargs = model_dict["kwargs"]
     model = model_dict["class"](**kwargs)
     model.load_state_dict(torch.load(REPO_PATH / model_dict["ckpt_path"]))
+    model.eval()
+    if device is not None:
+        model.to(device)
     return model

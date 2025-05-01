@@ -1,7 +1,10 @@
 import os
 
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset, RandomSampler
+from collections import defaultdict
+import numpy as np
+import random
 
 from .img_list_dataset import ImglistDataset
 from .preprocess import TestPreprocessor
@@ -159,6 +162,22 @@ def get_dataset(
     return dataset
 
 
+def _balanced_subset(ds, per_class, max_samples, seed):
+    rnd = random.Random(seed)
+    buckets = defaultdict(list)
+    labels = ds.get_labels()
+    for idx, label in enumerate(labels):
+        buckets[label].append(idx)
+    selected = []
+    for idxs in buckets.values():
+        rnd.shuffle(idxs)
+        selected.extend(idxs[:per_class])
+    rnd.shuffle(selected)
+    if max_samples:
+        selected = selected[:max_samples]
+    return Subset(ds, selected)
+
+
 def _collate_fn(batch):
     data = torch.stack([item["data"] for item in batch])
     label = torch.LongTensor([item["label"] for item in batch])
@@ -166,21 +185,30 @@ def _collate_fn(batch):
 
 
 def get_dataloader(
-    dataset_name,
-    split,
-    preprocessor_dataset_name,
-    batch_size,
+    dataset_name: str,
+    split: str,
+    preprocessor_dataset_name: str,
+    batch_size=128,
     num_workers=8,
     root_dir="/datasets/openood",
+    fit_subset_cfg=None,
 ):
-    dataset = get_dataset(
-        dataset_name, split, preprocessor_dataset_name, root_dir=root_dir
-    )
-    dataloader = DataLoader(
-        dataset,
+    ds = get_dataset(dataset_name, split, preprocessor_dataset_name, root_dir=root_dir)
+
+    # ---------- apply subset only for training split ----------
+    if split == "train" and fit_subset_cfg:
+        ds = _balanced_subset(
+            ds,
+            per_class=fit_subset_cfg.get("per_class", 0) or len(ds),
+            max_samples=fit_subset_cfg.get("max_samples"),
+            seed=fit_subset_cfg.get("seed", 0),
+        )
+
+    return DataLoader(
+        ds,
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
         collate_fn=_collate_fn,
+        pin_memory=True,
     )
-    return dataloader

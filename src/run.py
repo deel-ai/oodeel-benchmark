@@ -1,6 +1,11 @@
 # ────────────────────────────────────────────────────────────────
 # src/run.py        •  launch with:   python -m src.run
 # ────────────────────────────────────────────────────────────────
+import os
+
+# os.environ["WANDB_CONSOLE"] = "off"
+# os.environ["WANDB_SILENT"] = "true"  # suppress banners & warnings
+
 import argparse
 import json
 import hashlib
@@ -99,8 +104,10 @@ def short_descr(run):
         f"[magenta]{run['method']}:{run['layer_pack']}[/]{agg_txt}"
     )
 
+
 def show_phase(prog, task, run, phase):
     prog.tasks[task].description = f"{short_descr(run)} → {phase}"
+
 
 # ─── sweep builder ──────────────────────────────────────────────
 def build_runs():
@@ -238,10 +245,11 @@ def main():
                 resume="allow",
                 reinit=True,
             )
+
             scatter_tables = {}  # one per benchmark
 
             # 1) model --------------------------------------------------
-            model = get_network(run["id_ds"], run["model"]).to(device).eval()
+            model = get_network(run["id_ds"], run["model"], device)
 
             # 2) data ---------------------------------------------------
             id_fit_loader = get_dataloader(
@@ -250,6 +258,7 @@ def main():
                 run["id_ds"],
                 batch_size=run["batch_size"],
                 num_workers=run["num_workers"],
+                fit_subset_cfg=load_yaml("datasets", run["id_ds"]).get("fit_subset"),
             )
             id_test_loader = get_dataloader(
                 run["id_ds"],

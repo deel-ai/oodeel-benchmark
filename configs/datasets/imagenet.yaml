@@ -1,5 +1,3 @@
-id_split: train
-
 # Near / far OOD lists – only for this ID dataset
 ood:
   near: [ssb_hard, ninco]
@@ -9,3 +7,8 @@ ood:
 models:
   - resnet50
   - vit_b_16
+
+fit_subset: # applies only to the *training* DataLoader
+  max_samples: 200_000 # hard cap (after class-balancing)
+  per_class: 200 # keep ≤ 200 images per class, balanced
+  seed: 0 # reproducible
