@@ -20,6 +20,12 @@ results/                # one .parquet per (ID, model, detector, …)
 
 ---
 
+## Live view
+
+| Local console (Rich) | W&B dashboard |
+|----------------------|---------------|
+| ![Rich bar](https://github.com/user-attachments/assets/df91852a-55e6-47bf-b2bc-3ee48702e4d9) | ![Scatter](https://github.com/user-attachments/assets/4a942ba8-5a9b-46b3-b710-e7cbae4da257) |
+
 ## Quick start
 
 ```bash
