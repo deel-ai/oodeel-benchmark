@@ -24,7 +24,7 @@ results/                # one .parquet per (ID, model, detector, …)
 
 | Local console (Rich) | W&B dashboard |
 |----------------------|---------------|
-| ![Rich bar](https://github.com/user-attachments/assets/df91852a-55e6-47bf-b2bc-3ee48702e4d9) | ![Scatter](https://github.com/user-attachments/assets/4a942ba8-5a9b-46b3-b710-e7cbae4da257) |
+| ![Rich bar](https://github.com/user-attachments/assets/3d3d09ca-2319-4f3d-856f-49f587b15dcc)  | ![Scatter](https://github.com/user-attachments/assets/4a942ba8-5a9b-46b3-b710-e7cbae4da257) |
 
 ## Quick start
 
