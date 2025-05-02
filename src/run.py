@@ -3,8 +3,9 @@
 # ────────────────────────────────────────────────────────────────
 import os
 
-# os.environ["WANDB_CONSOLE"] = "off"
-# os.environ["WANDB_SILENT"] = "true"  # suppress banners & warnings
+os.environ["WANDB_CONSOLE"] = "off"
+os.environ["WANDB_SILENT"] = "true"  # suppress banners & warnings
+printed_wandb_banner = False
 
 import argparse
 import json
@@ -244,7 +245,19 @@ def main():
                 config=run,
                 resume="allow",
                 reinit=True,
+                settings=wandb.Settings(console="off"),  # <- no spam
             )
+
+            # print once the W&B banner
+            global printed_wandb_banner
+            if not printed_wandb_banner:
+                proj_url = getattr(wb, "project_url", "https://wandb.ai")
+                console.print(
+                    "\n"
+                    f"[bold blue]W&B:[/] logging to [link={proj_url}]{proj_url}[/link]"
+                    f"\n(local dir: {wb.dir})\n"
+                )
+                printed_wandb_banner = True
 
             scatter_tables = {}  # one per benchmark
 
@@ -286,6 +299,7 @@ def main():
 
             # 4) loop OOD ----------------------------------------------
             records, done, total_oods = [], 0, expected_rows
+            run_metrics = []
             for grp, ood_names in run["ood_lists"].items():
                 for ood_name in ood_names:
                     done += 1
@@ -311,6 +325,7 @@ def main():
                         metrics=["auroc", "tpr5fpr"],
                     )
                     auroc, tpr5 = m["auroc"], m["tpr5fpr"]
+                    run_metrics.append({"group": grp, "auroc": auroc, "tpr5": tpr5})
 
                     # parquet row
                     if not run["init"]:
@@ -369,9 +384,26 @@ def main():
 
                     progress.advance(task)
 
-            # progress.advance(task)
+            # after the loop – summarise the whole run -----------------------------
+            avg = pd.DataFrame(run_metrics).groupby("group").mean()
+            near, far = avg.loc["near", "auroc"], avg.loc["far", "auroc"]
+            harmonic = 2 / (1 / near + 1 / far)
+            console.log(
+                f"[green]✓[/] [green]{run['id_ds']}[/] | [cyan]{run['model']}[/] | "
+                f"[magenta]{run['method']}:{run['layer_pack']}[/] → "
+                f"AUROC-near={near:.3f}  AUROC-far={far:.3f}  HM={harmonic:.3f}"
+            )
             wb.save(str(out_file))
             wb.finish()
+
+            # free memory ----------------------------------------------
+            del detector, model, id_fit_loader, id_test_loader
+            torch.cuda.empty_cache()
+
+            if run["method"] == "dknn":  # faiss-gpu needs to be released
+                import faiss
+
+                faiss.StandardGpuResources().noTempMemory()  # dumps its temp buffers
 
 
 if __name__ == "__main__":

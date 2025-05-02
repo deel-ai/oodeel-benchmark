@@ -3,10 +3,17 @@
 # Helper functions:  model loading, dataloaders, seeds
 # ──────────────────────────────────────────────────────────────────────
 import random
+
 # import os
 import torch
+
 # from torch.utils.data import DataLoader
 # from torchvision import datasets, transforms, models
+import glob
+from pathlib import Path
+from typing import Sequence, Union, Optional
+
+import pandas as pd
 
 
 # --------------------- reproducibility --------------------------------
@@ -16,6 +23,79 @@ def seed_everything(seed: int = 0):
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+
+# ------------------------------------------------------------------
+#  Benchmark results I/O
+# ------------------------------------------------------------------
+def load_benchmark(
+    path_or_glob: Union[str, Path] = "results/*.parquet",
+    *,
+    flatten_json: Optional[Sequence[str]] = ("init_params", "fit_params"),
+) -> pd.DataFrame:
+    """Load all benchmark Parquet files into a single tidy DataFrame.
+
+    Args:
+        path_or_glob: Directory or glob pattern that locates the Parquet
+            files (e.g. `"results/*.parquet"` or `"my_runs/"`).
+        flatten_json: Column names whose values are JSON/dict objects.
+            Each such column is expanded into real columns prefixed with
+            `"<col>."`. Use `None` to disable flattening.
+
+    Returns:
+        A concatenated :class:`~pandas.DataFrame` containing one row per
+        *ID dataset x OOD dataset* pair, plus any expanded hyper-parameter
+        columns.
+
+    Raises:
+        FileNotFoundError: If no Parquet files match *path_or_glob*.
+    """
+    # resolve files
+    if "*" in str(path_or_glob):
+        parquet_files = glob.glob(str(path_or_glob))
+    else:
+        parquet_files = list(Path(path_or_glob).glob("*.parquet"))
+
+    if not parquet_files:
+        raise FileNotFoundError(f"No Parquet files found at {path_or_glob}")
+
+    # read & concat
+    df = pd.concat(map(pd.read_parquet, parquet_files), ignore_index=True)
+
+    # expand dict‑style columns
+    if flatten_json:
+        for col in flatten_json:
+            if col in df.columns:
+                df = df.join(
+                    df[col]
+                    .apply(lambda x: pd.Series(x if isinstance(x, dict) else {}))
+                    .add_prefix(f"{col}.")
+                )
+
+    # specify react, scale, ash methods
+    df["method"] = df.apply(
+        lambda x: (
+            x["method"] + "+react"
+            if x["init_params.use_react"] is True
+            else x["method"]
+        ),
+        axis=1,
+    )
+    df["method"] = df.apply(
+        lambda x: (
+            x["method"] + "+scale"
+            if x["init_params.use_scale"] is True
+            else x["method"]
+        ),
+        axis=1,
+    )
+    df["method"] = df.apply(
+        lambda x: (
+            x["method"] + "+ash" if x["init_params.use_ash"] is True else x["method"]
+        ),
+        axis=1,
+    )
+    return df
 
 
 # # ------------------------ datasets ------------------------------------
