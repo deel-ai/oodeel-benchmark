@@ -12,7 +12,6 @@ import json
 import hashlib
 import itertools
 from pathlib import Path
-from time import perf_counter
 
 import yaml
 import pandas as pd
@@ -33,7 +32,7 @@ from oodeel.eval.metrics import bench_metrics
 
 from dataset import get_dataloader  # your helpers
 from openood_networks import get_network
-from utils import seed_everything
+from utils import seed_everything, cuda_tracker
 
 
 # ─── paths ───────────────────────────────────────────────────────
@@ -97,12 +96,20 @@ wandb = wblog()
 
 # ─── pretty progress text ───────────────────────────────────────
 def short_descr(run):
+    # mode (e.g. react, scale, ash)
+    mode_txt = ""
+    for name in ["react", "scale", "ash"]:
+        if run["init"].get(f"use_{name}", False):
+            mode_txt = f"({name})"
+            break
+    # aggregator
     agg = run["init"].get("aggregator")
     agg_txt = f" ({agg})" if agg else ""
+    # description
     return (
         f"[green]{run['id_ds']}[/] / "
         f"[cyan]{run['model']}[/] / "
-        f"[magenta]{run['method']}:{run['layer_pack']}[/]{agg_txt}"
+        f"[magenta]{run['method']}{mode_txt}:{run['layer_pack']}[/]{agg_txt}"
     )
 
 
@@ -287,15 +294,24 @@ def main():
             if "aggregator" in init_kw:
                 agg_name = init_kw.pop("aggregator")
                 init_kw["aggregator"] = getattr(oodeel_aggregator, agg_name)()
+
+            console.log(
+                r"Running \[uid=",
+                f"{run['uid']}" + r"] → " + short_descr(run),
+            )
+
+            # init detector
             detector = Detector(**init_kw)
 
             show_phase(progress, task, run, "[yellow]Fitting[/]")
-            t0 = perf_counter()
-            detector.fit(model, fit_dataset=id_fit_loader, **run["fit"])
-            console.log(f"Fit done in {perf_counter()-t0:.1f}s  uid={run['uid']}")
+            with cuda_tracker(console, "Fit", True):
+                # fit the detector
+                detector.fit(model, fit_dataset=id_fit_loader, **run["fit"])
 
             show_phase(progress, task, run, "[blue]Scoring ID[/]")
-            id_scores = detector.score(id_test_loader)[0].tolist()
+            with cuda_tracker(console, "ID score", True):
+                # score the ID dataset
+                id_scores = detector.score(id_test_loader)[0].tolist()
 
             # 4) loop OOD ----------------------------------------------
             records, done, total_oods = [], 0, expected_rows
@@ -317,7 +333,8 @@ def main():
                         batch_size=run["batch_size"],
                         num_workers=run["num_workers"],
                     )
-                    ood_scores = detector.score(ood_loader)[0].tolist()
+                    with cuda_tracker(console, f"OOD {ood_name}", True):
+                        ood_scores = detector.score(ood_loader)[0].tolist()
 
                     # metrics
                     m = bench_metrics(

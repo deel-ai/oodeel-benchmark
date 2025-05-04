@@ -1,17 +1,21 @@
 # ──────────────────────────────────────────────────────────────────────
 # src/utils.py
-# Helper functions:  model loading, dataloaders, seeds
+# Helper functions:  seeds, CUDA memory tracking, benchmark results loading
 # ──────────────────────────────────────────────────────────────────────
 import random
 
 # import os
+import gc
+import time
+from contextlib import contextmanager
+import glob
+from pathlib import Path
+from typing import Sequence, Union, Optional
+
 import torch
 
 # from torch.utils.data import DataLoader
 # from torchvision import datasets, transforms, models
-import glob
-from pathlib import Path
-from typing import Sequence, Union, Optional
 
 import pandas as pd
 
@@ -25,9 +29,43 @@ def seed_everything(seed: int = 0):
     torch.backends.cudnn.benchmark = False
 
 
-# ------------------------------------------------------------------
-#  Benchmark results I/O
-# ------------------------------------------------------------------
+# --------------------- CUDA memory tracking ----------------------------
+def _to_mib(b):
+    return b / (1024**2)  # bytes → MiB
+
+
+@contextmanager
+def cuda_tracker(console, tag="", enabled: bool = True):
+    """Context manager to track CUDA memory usage.
+    Args:
+        console: Console object for logging.
+        tag: Tag to identify the context.
+        enabled: Whether to track memory usage or not.
+    """
+    if enabled:
+        torch.cuda.reset_peak_memory_stats()
+        start = torch.cuda.memory_allocated()
+        t0 = time.time()
+        yield
+        end = torch.cuda.memory_allocated()
+        peak = torch.cuda.max_memory_allocated()
+        dt = time.time() - t0
+        console.log(
+            (
+                f"[mem] {tag:20s} "
+                f"Δ={_to_mib(end-start):7.1f} MiB  "
+                f"peak={_to_mib(peak):7.1f} MiB  "
+                f"time={dt:5.1f}s"
+            ),
+            markup=False,
+        )
+        gc.collect()
+        torch.cuda.empty_cache()
+    else:
+        yield
+
+
+# ------------------- benchmark results loading --------------------------
 def load_benchmark(
     path_or_glob: Union[str, Path] = "results/*.parquet",
     *,
@@ -136,7 +174,9 @@ def load_benchmark(
 #     raise ValueError(f"Dataset '{name}' not implemented.")
 
 
-# def get_dataloader(name: str, split: str, batch_size: int = 128, num_workers: int = 4):
+# def get_dataloader(
+#     name: str, split: str, batch_size: int = 128, num_workers: int = 4
+# ):
 #     ds = get_dataset(name, split)
 #     return DataLoader(
 #         ds,
@@ -155,7 +195,9 @@ def load_benchmark(
 #     elif name == "resnet50":
 #         model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
 #     elif name == "vit_b_16":
-#         model = models.vit_b_16(weights=models.ViT_B_16_Weights.IMAGENET1K_SWAG_E2E_V1)
+#         model = models.vit_b_16(
+#             weights=models.ViT_B_16_Weights.IMAGENET1K_SWAG_E2E_V1
+#         )
 #     else:
 #         raise ValueError(f"Model '{name}' not supported.")
 
