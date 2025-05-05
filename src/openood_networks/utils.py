@@ -48,7 +48,4 @@ def get_network(dataset_name, model_name, device=None):
     kwargs = model_dict["kwargs"]
     model = model_dict["class"](**kwargs)
     model.load_state_dict(torch.load(REPO_PATH / model_dict["ckpt_path"]))
-    model.eval()
-    if device is not None:
-        model.to(device)
     return model

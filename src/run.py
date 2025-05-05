@@ -31,8 +31,7 @@ import oodeel.aggregator as oodeel_aggregator
 from oodeel.eval.metrics import bench_metrics
 
 from dataset import get_dataloader  # your helpers
-from openood_networks import get_network
-from utils import seed_everything, cuda_tracker
+from utils import seed_everything, cuda_tracker, get_model
 
 
 # ─── paths ───────────────────────────────────────────────────────
@@ -269,7 +268,7 @@ def main():
             scatter_tables = {}  # one per benchmark
 
             # 1) model --------------------------------------------------
-            model = get_network(run["id_ds"], run["model"], device)
+            model = get_model(run["id_ds"], run["model"], device)
 
             # 2) data ---------------------------------------------------
             id_fit_loader = get_dataloader(
@@ -291,9 +290,20 @@ def main():
             # 3) detector ----------------------------------------------
             Detector = getattr(oodeel_methods, run["method_class"])
             init_kw = run["init"].copy()
+            fit_kw = run["fit"].copy()
+
+            # aggregator
             if "aggregator" in init_kw:
                 agg_name = init_kw.pop("aggregator")
                 init_kw["aggregator"] = getattr(oodeel_aggregator, agg_name)()
+
+            # vit: hardcode the postproc_fns
+            if run["model"].startswith("vit_"):
+                num_layers = len(fit_kw["feature_layers_id"])
+                if num_layers >= 1:
+                    fit_kw["postproc_fns"] = [lambda x: torch.mean(x, dim=1)] * (
+                        num_layers - 1
+                    ) + [lambda x: x[:, 0]]
 
             console.log(
                 r"Running \[uid=",
@@ -410,6 +420,7 @@ def main():
                 f"[magenta]{run['method']}:{run['layer_pack']}[/] → "
                 f"AUROC-near={near:.3f}  AUROC-far={far:.3f}  HM={harmonic:.3f}"
             )
+            console.print("")  # empty line
             wb.save(str(out_file))
             wb.finish()
 

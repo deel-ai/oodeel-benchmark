@@ -1,7 +1,7 @@
 # Near / far OOD lists – only for this ID dataset
 ood:
   near: [ssb_hard, ninco]
-  far:  [inaturalist, texture, openimageo]
+  far: [inaturalist, texture, openimageo]
 
 # Which models (and which layer packs) to try on **this** dataset
 models:

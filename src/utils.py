@@ -15,7 +15,8 @@ from typing import Sequence, Union, Optional
 import torch
 
 # from torch.utils.data import DataLoader
-# from torchvision import datasets, transforms, models
+from torchvision import models
+from openood_networks.utils import get_network
 
 import pandas as pd
 
@@ -136,6 +137,33 @@ def load_benchmark(
     return df
 
 
+# ------------------------- models -------------------------------------
+def get_model(dataset_name, model_name, device=None):
+    """Loads a model and moves it to CUDA if available."""
+    if model_name.startswith("vit_"):
+        # load from torchvision
+        if model_name == "vit_b_16":
+            assert dataset_name == "imagenet", "vit_b_16 only supports imagenet"
+            model = models.vit_b_16(weights=models.ViT_B_16_Weights.IMAGENET1K_V1)
+        else:
+            raise ValueError(
+                f"Model {model_name} not supported. "
+                "Only vit_b_16 is supported for imagenet."
+            )
+    else:
+        # load from openood_networks
+        model = get_network(
+            dataset_name=dataset_name,
+            model_name=model_name,
+            device=device,
+        )
+
+    model.eval()
+    if device is not None:
+        model.to(device)
+    return model
+
+
 # # ------------------------ datasets ------------------------------------
 # _DATA_ROOT = os.getenv("DATA_ROOT", "./data")
 
@@ -185,23 +213,3 @@ def load_benchmark(
 #         num_workers=num_workers,
 #         pin_memory=True,
 #     )
-
-
-# # ------------------------- models -------------------------------------
-# def get_model(name: str):
-#     """Loads a model and moves it to CUDA if available."""
-#     if name == "resnet18":
-#         model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
-#     elif name == "resnet50":
-#         model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
-#     elif name == "vit_b_16":
-#         model = models.vit_b_16(
-#             weights=models.ViT_B_16_Weights.IMAGENET1K_SWAG_E2E_V1
-#         )
-#     else:
-#         raise ValueError(f"Model '{name}' not supported.")
-
-#     model.eval()
-#     if torch.cuda.is_available():
-#         model.cuda()
-#     return model

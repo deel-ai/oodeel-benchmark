@@ -1,0 +1,28 @@
+architecture: vit_b_16
+
+# Canonical layer packs for ALL datasets that use vit_b16
+layer_packs:
+  full:
+    [
+      "encoder.layers.encoder_layer_1",
+      "encoder.layers.encoder_layer_2",
+      "encoder.layers.encoder_layer_3",
+      "encoder.layers.encoder_layer_4",
+      "encoder.layers.encoder_layer_5",
+      "encoder.layers.encoder_layer_6",
+      "encoder.layers.encoder_layer_7",
+      "encoder.layers.encoder_layer_8",
+      "encoder.layers.encoder_layer_9",
+      "encoder.layers.encoder_layer_10",
+      "encoder.layers.encoder_layer_11",
+    ]
+  penultimate: ["encoder.layers.encoder_layer_11"]
+  partial:
+    [
+      "encoder.layers.encoder_layer_7",
+      "encoder.layers.encoder_layer_8",
+      "encoder.layers.encoder_layer_9",
+      "encoder.layers.encoder_layer_10",
+      "encoder.layers.encoder_layer_11",
+    ]
+  none: []
