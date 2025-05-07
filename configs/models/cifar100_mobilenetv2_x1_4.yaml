@@ -1,0 +1,8 @@
+architecture: cifar100_mobilenetv2_x1_4
+
+# Canonical layer packs for ALL datasets that use ResNet-18
+layer_packs:
+  full:        [features.1, features.3, features.5, features.7, features.9, features.11, features.13, features.15, features.17, classifier.0]
+  penultimate: [classifier.0]
+  partial:     [features.11, features.13, features.15, features.17, classifier.0]
+  none:        []

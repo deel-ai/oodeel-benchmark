@@ -150,6 +150,14 @@ def get_model(dataset_name, model_name, device=None):
                 f"Model {model_name} not supported. "
                 "Only vit_b_16 is supported for imagenet."
             )
+    elif model_name.startswith("cifar"):
+        # load from https://github.com/chenyaofo/pytorch-cifar-models
+        model = torch.hub.load(
+            repo_or_dir="chenyaofo/pytorch-cifar-models",
+            model=model_name,
+            pretrained=True,
+            verbose=False,
+        ).to(device)
     else:
         # load from openood_networks
         model = get_network(
