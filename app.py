@@ -214,7 +214,14 @@ with tab1:
     st.subheader(f"Top runs — ID: {id_ds.capitalize()}")
     st.write(f"Showing {len(filtered)} / {len(df)} runs")
     styled = filtered.style.background_gradient(
-        subset=["near", "far"], cmap="YlOrRd_r",
+        subset=["near", "far"],
+        cmap="YlOrRd_r",
+    )
+    styled.format(
+        {
+            "near": "{:.3f}",
+            "far": "{:.3f}",
+        }
     )
     st.dataframe(styled, height=800, use_container_width=True)
 
