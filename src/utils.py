@@ -112,44 +112,64 @@ def load_benchmark(
                 )
 
     # specify react, scale, ash methods
-    df["method"] = df.apply(
-        lambda x: (
-            x["method"] + "+react"
-            if x["init_params.use_react"] is True
-            else x["method"]
-        ),
-        axis=1,
-    )
-    df["method"] = df.apply(
-        lambda x: (
-            x["method"] + "+scale"
-            if x["init_params.use_scale"] is True
-            else x["method"]
-        ),
-        axis=1,
-    )
-    df["method"] = df.apply(
-        lambda x: (
-            x["method"] + "+ash" if x["init_params.use_ash"] is True else x["method"]
-        ),
-        axis=1,
-    )
+    # df["method"] = df.apply(
+    #     lambda x: (
+    #         x["method"] + "+react"
+    #         if x["init_params.use_react"] is True
+    #         else x["method"]
+    #     ),
+    #     axis=1,
+    # )
+    # df["method"] = df.apply(
+    #     lambda x: (
+    #         x["method"] + "+scale"
+    #         if x["init_params.use_scale"] is True
+    #         else x["method"]
+    #     ),
+    #     axis=1,
+    # )
+    # df["method"] = df.apply(
+    #     lambda x: (
+    #         x["method"] + "+ash" if x["init_params.use_ash"] is True else x["method"]
+    #     ),
+    #     axis=1,
+    # )
     return df
 
 
 # ------------------------- models -------------------------------------
-def get_model(dataset_name, model_name, device=None):
+def get_model(dataset_name, model_name, device=None, source=None):
     """Loads a model and moves it to CUDA if available."""
-    if model_name.startswith("vit_"):
-        # load from torchvision
+    # load from torchvision
+    if source == "torchvision":
         if model_name == "vit_b_16":
             assert dataset_name == "imagenet", "vit_b_16 only supports imagenet"
             model = models.vit_b_16(weights=models.ViT_B_16_Weights.IMAGENET1K_V1)
-        else:
-            raise ValueError(
-                f"Model {model_name} not supported. "
-                "Only vit_b_16 is supported for imagenet."
+        elif model_name == "vit_b_16_swag_linear":
+            assert (
+                dataset_name == "imagenet"
+            ), "vit_b_16_swag_linear only supports imagenet"
+            model = models.vit_b_16(
+                weights=models.ViT_B_16_Weights.IMAGENET1K_SWAG_LINEAR_V1
             )
+        elif model_name == "mobilenet_v2":
+            assert dataset_name == "imagenet", "mobilenet_v2 only supports imagenet"
+            model = models.mobilenet_v2(
+                weights=models.MobileNet_V2_Weights.IMAGENET1K_V1
+            )
+        elif model_name == "mobilenet_v3_large":
+            assert (
+                dataset_name == "imagenet"
+            ), "mobilenet_v3_large only supports imagenet"
+            model = models.mobilenet_v3_large(
+                weights=models.MobileNet_V3_Large_Weights.IMAGENET1K_V1
+            )
+        elif model_name == "regnet_y_16gf":
+            assert dataset_name == "imagenet", "regnet_y_16gf only supports imagenet"
+            model = models.regnet_y_16gf(
+                weights=models.RegNet_Y_16GF_Weights.IMAGENET1K_V1
+            )
+    # load cifar models
     elif model_name.startswith("cifar"):
         # load from https://github.com/chenyaofo/pytorch-cifar-models
         model = torch.hub.load(

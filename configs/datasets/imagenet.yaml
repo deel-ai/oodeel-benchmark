@@ -7,6 +7,10 @@ ood:
 models:
   - resnet50
   - vit_b_16
+  - vit_b_16_swag_linear
+  - mobilenet_v2
+  - mobilenet_v3_large
+  - regnet_y_16gf
 
 fit_subset: # applies only to the *training* DataLoader
   max_samples: 200_000 # hard cap (after class-balancing)

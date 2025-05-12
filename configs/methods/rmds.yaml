@@ -5,4 +5,4 @@ init_grid:
   aggregator: [FisherAggregator]
 
 fit_grid:
-  layer_packs: [full, penultimate]
+  layer_packs: [full, partial, penultimate]

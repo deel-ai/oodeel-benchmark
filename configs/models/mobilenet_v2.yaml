@@ -1,0 +1,40 @@
+architecture: mobilenet_v2
+source: torchvision
+
+# Canonical layer packs for ALL datasets that use Mobilenet-v2
+layer_packs:
+  full:
+    [
+      features.1,
+      features.2,
+      features.3,
+      features.4,
+      features.5,
+      features.6,
+      features.7,
+      features.8,
+      features.9,
+      features.10,
+      features.11,
+      features.12,
+      features.13,
+      features.14,
+      features.15,
+      features.16,
+      features.17,
+      features,
+    ]
+  penultimate: [features]
+  partial:
+    [
+      features.10,
+      features.11,
+      features.12,
+      features.13,
+      features.14,
+      features.15,
+      features.16,
+      features.17,
+      features,
+    ]
+  none: []

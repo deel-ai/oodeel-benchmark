@@ -175,6 +175,7 @@ def build_runs():
                                     uid=uid,
                                     id_ds=id_ds,
                                     model=model_name,
+                                    source=model_spec.get("source", None),
                                     layer_pack=pack,
                                     layers=layers,
                                     ood_lists=ds_cfg["ood"],
@@ -268,7 +269,9 @@ def main():
             scatter_tables = {}  # one per benchmark
 
             # 1) model --------------------------------------------------
-            model = get_model(run["id_ds"], run["model"], device)
+            model = get_model(
+                run["id_ds"], run["model"], device, run.get("source", None)
+            )
 
             # 2) data ---------------------------------------------------
             id_fit_loader = get_dataloader(

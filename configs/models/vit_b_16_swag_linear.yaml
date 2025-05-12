@@ -1,5 +1,5 @@
-architecture: vit_b_16
-source: torchvision
+architecture: vit_b_16_swag_linear
+repo: torchvision
 
 # Canonical layer packs for ALL datasets that use vit_b16
 layer_packs:
