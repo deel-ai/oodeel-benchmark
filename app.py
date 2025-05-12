@@ -3,8 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objs as go
-import seaborn as sns
-import matplotlib.pyplot as plt
+import yaml
 
 from src.utils import load_benchmark
 
@@ -133,27 +132,36 @@ def plot_box(df):
         x="method_label",
         y="AUROC",
         color="OOD-type",
+        color_discrete_sequence=px.colors.qualitative.Plotly,
         title="Distribution of Near vs Far AUROC by Method",
     )
 
 
-def plot_heatmap(df, id_ds):
+def plot_heatmap_plotly(df, id_ds):
+    # build pivoted avg table
     heat = df.assign(avg=df[["near", "far"]].mean(axis=1)).pivot_table(
-        index="method_label", columns="model", values="avg"
+        index="method_label",
+        columns="model",
+        values="avg",
+        aggfunc="mean",  # ← handle duplicates
     )
-    fig, ax = plt.subplots(figsize=(12, 10), dpi=200)
-    sns.heatmap(
+    # use plotly express for a nice interactive heatmap
+    fig = px.imshow(
         heat,
-        annot=True,
-        fmt=".3f",
-        cbar_kws={"label": "Avg (near+far) AUROC"},
-        annot_kws={"fontsize": 6},
-        ax=ax,
+        text_auto=".3f",
+        labels={"x": "Model", "y": "Method", "color": "Avg AUROC"},
+        aspect="auto",
+        color_continuous_scale="Magma",
+        # color_continuous_scale="YlOrRd",
+        # color_continuous_scale="RdYlGn",
     )
-    ax.set_title(f"Avg AUROC per Method x Model — {id_ds}", fontsize=16, pad=12)
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8)
-    ax.set_yticklabels(ax.get_yticklabels(), fontsize=6)
-    plt.tight_layout()
+    fig.update_layout(
+        title=f"Avg AUROC per Method x Model — {id_ds}",
+        xaxis_tickangle=-45,
+        margin=dict(l=150, t=50, b=50),  # make room on the left
+        height=max(600, 24 * heat.shape[0]),  # grow height per method
+    )
+    fig.update_yaxes(automargin=True, tickfont=dict(size=8))  # ensure no clipping
     return fig
 
 
@@ -202,9 +210,35 @@ filtered = filter_leaderboard(df, models, methods, packs, search)
 tab1, tab2 = st.tabs(["🏆 Leaderboard", "📊 Visualizations"])
 
 with tab1:
+    # Leaderboard table
     st.subheader(f"Top runs — ID: {id_ds.capitalize()}")
     st.write(f"Showing {len(filtered)} / {len(df)} runs")
-    st.dataframe(filtered, height=800, use_container_width=True)
+    styled = filtered.style.background_gradient(
+        subset=["near", "far"], cmap="YlOrRd_r",
+    )
+    st.dataframe(styled, height=800, use_container_width=True)
+
+    def sanitize(x):
+        if isinstance(x, np.ndarray):
+            return x.tolist()
+        if isinstance(x, dict):
+            return {k: sanitize(v) for k, v in x.items()}
+        if isinstance(x, list):
+            return [sanitize(v) for v in x]
+        return x
+
+    # Run‐config viewer
+    st.markdown("**Run Configuration**")
+    sel = st.selectbox("Select UID", filtered["uid"])
+    run_row = raw[raw["uid"] == sel].iloc[0]
+    config = {
+        "id_dataset": run_row.id_dataset,
+        "model": run_row.model,
+        "method": run_row.method,
+        "init_params": run_row.init_params,
+        "fit_params": run_row.fit_params,
+    }
+    st.code(yaml.dump(sanitize(config), sort_keys=False), language="yaml")
 
 with tab2:
     st.subheader("Scatter with Pareto front")
@@ -214,7 +248,7 @@ with tab2:
     st.plotly_chart(plot_box(filtered), use_container_width=True)
 
     st.subheader("Method x Model Avg AUROC Heatmap")
-    st.pyplot(plot_heatmap(filtered, id_ds))
+    st.plotly_chart(plot_heatmap_plotly(filtered, id_ds), use_container_width=True)
 
     st.subheader("Small Multiples by Model")
     st.plotly_chart(plot_small_multiples(filtered), use_container_width=True)
