@@ -266,9 +266,9 @@ with tab1:
         if isinstance(x, np.ndarray):
             return x.tolist()
         if isinstance(x, dict):
-            return {k: sanitize(v) for k, v in x.items()}
+            return {k: sanitize(v) for k, v in x.items() if v is not None}
         if isinstance(x, list):
-            return [sanitize(v) for v in x]
+            return [sanitize(v) for v in x if v is not None]
         return x
 
     # Run‐config viewer
