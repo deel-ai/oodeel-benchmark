@@ -209,6 +209,48 @@ def plot_model_corr_heatmap(df, id_ds):
     return fig
 
 
+def plot_activation_shaping_boxplots(df, id_ds):
+    # 1) pull hyper_mode out of the (…)-suffix, defaulting to "none"
+    df2 = df.copy()
+    df2["hyper_mode"] = (
+        df2["method_label"]
+        .str.extract(r"\((.*)\)$")[0]  # grabs “react”, “ash”, “scale”, or combos
+        .fillna("none")  # rows with no (…) become “none”
+    )
+    # 2) keep only the four pure modes
+    df2 = df2[df2["hyper_mode"].isin(["none", "react", "ash", "scale"])]
+
+    # 3) strip off the suffix to get the base method name
+    df2["base_method"] = df2["method_label"].str.replace(r" \(.+\)$", "", regex=True)
+
+    # 4) limit to just the methods that actually support shaping
+    shaped = df2[df2["hyper_mode"] != "none"]["base_method"].unique()
+    df2 = df2[df2["base_method"].isin(shaped)]
+
+    # 5) for each (base_method, hyper_mode, model), pick the run with max “near”
+    best = df2.sort_values("near", ascending=False).drop_duplicates(
+        subset=["base_method", "hyper_mode", "model"],
+        keep="first",
+    )
+
+    # 6) box-plot: x=mode, y=near, one facet per base method
+    fig = px.box(
+        best,
+        x="hyper_mode",
+        y="near",
+        color="hyper_mode",
+        facet_col="base_method",
+        category_orders={"hyper_mode": ["none", "react", "ash", "scale"]},
+        labels={"near": "Near AUROC", "hyper_mode": "Mode", "base_method": "Method"},
+        title=f"Activation‐Shaping Effect (Near AUROC) — {id_ds}",
+    )
+    fig.update_layout(
+        showlegend=True,
+        height=400,
+    )
+    return fig
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Streamlit layout
 # ──────────────────────────────────────────────────────────────────────
@@ -309,7 +351,7 @@ with tab2:
     st.plotly_chart(plot_small_multiples(filtered), use_container_width=True)
 
 with tab3:
-    # st.subheader("Model vs Model Rank-Correlation Heatmap")
+    # exp 1: model vs model rank-correlation
     st.markdown(r"#### Model vs Model Rank-Correlation Heatmap")
     st.markdown(
         r"""
@@ -328,3 +370,23 @@ with tab3:
         """
     )
     st.plotly_chart(plot_model_corr_heatmap(filtered, id_ds), use_container_width=True)
+
+    # exp 2: activation shaping effect
+    st.markdown(r"#### Activation‐Shaping Effect (Near AUROC)")
+    st.markdown(
+        r"""
+    For each logit-based method $k$ and each shaping mode $\displaystyle
+    m\in\{\text{none},\text{react},\text{ash},\text{scale}\}$, define for
+                each model $i$:
+    $$
+    v_{i,k,m} \;=\; 
+                \mathrm{AUROC}_{\text{near}}\bigl(\text{model}_i,
+                \text{method}_k,m\bigr).
+    $$
+    We then draw boxplots of the distributions $\{v_{i,k,m}\}_i$ across models,
+    comparing the four modes side by side for each method.
+    """
+    )
+    st.plotly_chart(
+        plot_activation_shaping_boxplots(filtered, id_ds), use_container_width=True
+    )
