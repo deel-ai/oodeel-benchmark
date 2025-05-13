@@ -178,6 +178,35 @@ def plot_small_multiples(df):
     )
 
 
+def plot_model_corr_heatmap(df, id_ds):
+    # 1) For each (model, method_label), pick the run with max near AUROC
+    best = df.sort_values("near", ascending=False).drop_duplicates(
+        subset=["model", "method_label"], keep="first"
+    )
+
+    # 2) Pivot so rows=models, cols=methods, values=near
+    pivot = best.pivot(index="model", columns="method_label", values="near")
+
+    # 3) Compute Spearman (rank) correlation between model-vectors
+    #    .corr(method="spearman") works directly on the pivoted DataFrame
+    corr = pivot.T.corr(method="spearman")
+
+    # 4) Plot with Plotly
+    fig = px.imshow(
+        corr,
+        text_auto=".2f",
+        labels={"x": "Model", "y": "Model", "color": "Spearman ρ"},
+        aspect="auto",
+        color_continuous_scale="YlOrRd_r",
+    )
+    fig.update_layout(
+        title=f"Model vs Model Rank-Correlation — {id_ds}",
+        xaxis_tickangle=-45,
+        margin=dict(l=80, t=50, b=50),
+    )
+    return fig
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Streamlit layout
 # ──────────────────────────────────────────────────────────────────────
@@ -207,7 +236,9 @@ packs = st.sidebar.multiselect(
 filtered = filter_leaderboard(df, models, methods, packs, search)
 
 # Tabs
-tab1, tab2 = st.tabs(["🏆 Leaderboard", "📊 Visualizations"])
+tab1, tab2, tab3 = st.tabs(
+    ["🏆 Leaderboard", "📊 Visualizations", "📚 Appendix Experiments"]
+)
 
 with tab1:
     # description above the leaderboard
@@ -274,3 +305,13 @@ with tab2:
 
     st.subheader("Small Multiples by Model")
     st.plotly_chart(plot_small_multiples(filtered), use_container_width=True)
+
+with tab3:
+    st.subheader("Model vs Model Rank-Correlation Heatmap")
+    st.markdown(
+        "_Model vs Model rank-correlation experiment:_  \n"
+        "For each ID dataset, we take each model's best Near-OOD AUROC per method, "
+        "compute **Spearman rank correlations** between the resulting performance "
+        "vectors, and display the pairwise ρ values in a **Model Correlation Heatmap**."
+    )
+    st.plotly_chart(plot_model_corr_heatmap(filtered, id_ds), use_container_width=True)
