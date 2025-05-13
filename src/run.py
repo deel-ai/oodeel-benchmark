@@ -30,8 +30,8 @@ import oodeel.methods as oodeel_methods
 import oodeel.aggregator as oodeel_aggregator
 from oodeel.eval.metrics import bench_metrics
 
-from dataset import get_dataloader  # your helpers
-from utils import seed_everything, cuda_tracker, get_model
+from .dataset import get_dataloader  # your helpers
+from .utils import seed_everything, cuda_tracker, get_model
 
 
 # ─── paths ───────────────────────────────────────────────────────

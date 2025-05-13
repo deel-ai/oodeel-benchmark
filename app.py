@@ -13,7 +13,7 @@ from src.utils import load_benchmark
 # ──────────────────────────────────────────────────────────────────────
 @st.cache_data
 def load_raw_results():
-    return load_benchmark()
+    return load_benchmark("reduced_results/*.parquet")
 
 
 # ──────────────────────────────────────────────────────────────────────

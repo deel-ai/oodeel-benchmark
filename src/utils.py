@@ -16,7 +16,7 @@ import torch
 
 # from torch.utils.data import DataLoader
 from torchvision import models
-from openood_networks.utils import get_network
+from .openood_networks.utils import get_network
 
 import pandas as pd
 
