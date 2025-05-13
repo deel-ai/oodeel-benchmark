@@ -294,24 +294,35 @@ with tab2:
         "- **Heatmap:** average AUROC (near+far) per method × model.  \n"
         "- **Small multiples:** per-model scatter facets."
     )
-    st.subheader("Scatter with Pareto front")
+    st.markdown(r"#### Scatter with Pareto front")
     st.plotly_chart(plot_scatter_pareto(filtered, id_ds), use_container_width=True)
 
-    st.subheader("Near vs Far AUROC Boxplot")
+    st.markdown(r"#### Near vs Far AUROC Boxplot")
     st.plotly_chart(plot_box(filtered), use_container_width=True)
 
-    st.subheader("Method x Model Avg AUROC Heatmap")
+    st.markdown(r"#### Method x Model Avg AUROC Heatmap")
     st.plotly_chart(plot_heatmap_plotly(filtered, id_ds), use_container_width=True)
 
-    st.subheader("Small Multiples by Model")
+    st.markdown(r"#### Small Multiples by Model")
     st.plotly_chart(plot_small_multiples(filtered), use_container_width=True)
 
 with tab3:
-    st.subheader("Model vs Model Rank-Correlation Heatmap")
+    # st.subheader("Model vs Model Rank-Correlation Heatmap")
+    st.markdown(r"#### Model vs Model Rank-Correlation Heatmap")
     st.markdown(
-        "_Model vs Model rank-correlation experiment:_  \n"
-        "For each ID dataset, we take each model's best Near-OOD AUROC per method, "
-        "compute **Spearman rank correlations** between the resulting performance "
-        "vectors, and display the pairwise ρ values in a **Model Correlation Heatmap**."
+        r"""
+        For each ID dataset, define for each model $i$ the vector of best Near-OOD
+         AUROCs over all methods:
+        $$
+        \mathbf{v}_i = \bigl[\,v_{i1},\,v_{i2},\,\dots,\,v_{iK}\bigr], 
+        \quad v_{ik} = \max_{\text{layer\_pack}}\mathrm{AUROC}\bigl(\text{model}_i,
+        \text{method}_k\bigr)
+        $$
+        Then compute Spearman’s rank‐correlation
+        $$
+        \rho_{ij} = \mathrm{SpearmanCorr}\bigl(\mathbf{v}_i,\mathbf{v}_j\bigr)
+        $$
+        and display the matrix $\{\rho_{ij}\}$ in a **Model Correlation Heatmap**.
+        """
     )
     st.plotly_chart(plot_model_corr_heatmap(filtered, id_ds), use_container_width=True)
