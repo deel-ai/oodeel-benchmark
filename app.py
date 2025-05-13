@@ -210,6 +210,12 @@ filtered = filter_leaderboard(df, models, methods, packs, search)
 tab1, tab2 = st.tabs(["🏆 Leaderboard", "📊 Visualizations"])
 
 with tab1:
+    # description above the leaderboard
+    st.markdown(
+        "_One row per (ID dataset × model × method × layer_pack)._  "
+        "For each, we tested multiple hyper-parameter configurations and "
+        "**selected the best** according to the _near_-OOD AUROC."
+    )
     # Leaderboard table
     st.subheader(f"Top runs — ID: {id_ds.capitalize()}")
     st.write(f"Showing {len(filtered)} / {len(df)} runs")
@@ -248,6 +254,15 @@ with tab1:
     st.code(yaml.dump(sanitize(config), sort_keys=False), language="yaml")
 
 with tab2:
+    # explanation of what the visualizations show
+    st.markdown(
+        "_Interactive visualizations of the selected runs:_  \n"
+        "- **Scatter & Pareto:** each point is a run (near vs far AUROC), with the "
+        "Pareto front highlighted.  \n"
+        "- **Boxplot:** distribution of near/far AUROC across methods.  \n"
+        "- **Heatmap:** average AUROC (near+far) per method × model.  \n"
+        "- **Small multiples:** per-model scatter facets."
+    )
     st.subheader("Scatter with Pareto front")
     st.plotly_chart(plot_scatter_pareto(filtered, id_ds), use_container_width=True)
 
