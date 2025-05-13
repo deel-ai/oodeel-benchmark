@@ -4,6 +4,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objs as go
 import yaml
+import math
 
 from src.utils import load_benchmark
 
@@ -241,13 +242,57 @@ def plot_activation_shaping_boxplots(df, id_ds):
         color="hyper_mode",
         facet_col="base_method",
         category_orders={"hyper_mode": ["none", "react", "ash", "scale"]},
-        labels={"near": "Near AUROC", "hyper_mode": "Mode", "base_method": "Method"},
+        labels={"near": "Near AUROC", "hyper_mode": "Mode"},
         title=f"Activation‐Shaping Effect (Near AUROC) — {id_ds}",
     )
     fig.update_layout(
         showlegend=True,
         height=400,
     )
+
+    # 7) clean up facet titles
+    for anno in fig.layout.annotations:
+        anno.text = anno.text.replace("base_method=", "")
+    return fig
+
+
+def plot_layerpack_boxplots(df, id_ds, ood_group="near"):
+    # 1) keep only the three feature‐layer‐pack modes
+    packs = ["penultimate", "partial", "full"]
+    df2 = df[df["layer_pack"].isin(packs)].copy()
+
+    # 2) for each (method_label, layer_pack, model), take the run with max near AUROC
+    best = df2.sort_values(ood_group, ascending=False).drop_duplicates(
+        subset=["method_label", "layer_pack", "model"],
+        keep="first",
+    )
+
+    # 3) build a faceted boxplot: x=layer_pack, y=near, one facet per method
+    fig = px.box(
+        best,
+        x="layer_pack",
+        y=ood_group,
+        color="layer_pack",
+        facet_col="method_label",
+        # facet_col_wrap=per_row,
+        category_orders={"layer_pack": packs},
+        labels={
+            ood_group: f"{ood_group.capitalize()} AUROC",
+            "layer_pack": "Layer Pack",
+        },
+        title=f"Feature‐Layer‐Pack Effect ({ood_group.capitalize()} AUROC) — {id_ds}",
+    )
+
+    # 4) adjust layout so facets wrap and height scales with number of rows
+    fig.update_layout(
+        showlegend=True,
+        height=300,
+    )
+
+    # 5) clean up facet titles
+    for anno in fig.layout.annotations:
+        anno.text = anno.text.replace("method_label=", "")
+
     return fig
 
 
@@ -281,7 +326,7 @@ filtered = filter_leaderboard(df, models, methods, packs, search)
 
 # Tabs
 tab1, tab2, tab3 = st.tabs(
-    ["🏆 Leaderboard", "📊 Visualizations", "📚 Appendix Experiments [WIP]"]
+    ["🏆 Leaderboard", "📊 Visualizations", "📚 Paper Experiments [WIP]"]
 )
 
 with tab1:
@@ -352,14 +397,14 @@ with tab2:
 
 with tab3:
     # exp 1: model vs model rank-correlation
-    st.markdown(r"#### Model vs Model Rank-Correlation Heatmap")
+    st.markdown(r"#### Exp 1: Model vs Model Rank-Correlation Heatmap")
     st.markdown(
         r"""
         For each ID dataset, define for each model $i$ the vector of best Near-OOD
          AUROCs over all methods:
         $$
         \mathbf{v}_i = \bigl[\,v_{i1},\,v_{i2},\,\dots,\,v_{iK}\bigr], 
-        \quad v_{ik} = \max_{\text{layer\_pack}}\mathrm{AUROC}\bigl(\text{model}_i,
+        \quad v_{ik} = \max_{\text{layer\_pack}}\mathrm{AUROC}_{\text{near}}\bigl(\text{model}_i,
         \text{method}_k\bigr)
         $$
         Then compute Spearman’s rank‐correlation
@@ -372,7 +417,8 @@ with tab3:
     st.plotly_chart(plot_model_corr_heatmap(filtered, id_ds), use_container_width=True)
 
     # exp 2: activation shaping effect
-    st.markdown(r"#### Activation‐Shaping Effect (Near AUROC)")
+    st.markdown("---")
+    st.markdown(r"#### Exp 2: Activation‐Shaping Effect (Near AUROC)")
     st.markdown(
         r"""
     For each logit-based method $k$ and each shaping mode $\displaystyle
@@ -389,4 +435,29 @@ with tab3:
     )
     st.plotly_chart(
         plot_activation_shaping_boxplots(filtered, id_ds), use_container_width=True
+    )
+
+    # exp 3: feature-layer-pack effect
+    st.markdown("---")
+    st.markdown(r"#### Exp 3: Layer-wise Score Aggregation Effect (Near and Far AUROC)")
+    st.markdown(
+        r"""
+    For each feature-based method $k$ and each layer-pack mode
+    $\displaystyle p\in\{\text{penultimate},\;\text{partial},\;\text{full}\}$, define
+    for each model $i$:
+    $$
+    v_{i,k,p}
+    \;=\;
+    \mathrm{AUROC}\bigl(\text{model}_i,
+    \text{method}_k,\text{layer\_pack}=p\bigr).
+    $$
+    We then draw boxplots of the distributions $\{v_{i,k,p}\}_i$ across models,
+    comparing the three layer-pack modes side by side for each method.
+    """
+    )
+    st.plotly_chart(
+        plot_layerpack_boxplots(filtered, id_ds, "near"), use_container_width=True
+    )
+    st.plotly_chart(
+        plot_layerpack_boxplots(filtered, id_ds, "far"), use_container_width=True
     )
