@@ -198,6 +198,8 @@ def plot_model_corr_heatmap(df, id_ds):
         labels={"x": "Model", "y": "Model", "color": "Spearman ρ"},
         aspect="auto",
         color_continuous_scale="YlOrRd_r",
+        zmin=0,
+        zmax=1,
     )
     fig.update_layout(
         title=f"Model vs Model Rank-Correlation — {id_ds}",
