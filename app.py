@@ -153,8 +153,6 @@ def plot_heatmap_plotly(df, id_ds):
         labels={"x": "Model", "y": "Method", "color": "Avg AUROC"},
         aspect="auto",
         color_continuous_scale="Magma",
-        # color_continuous_scale="YlOrRd",
-        # color_continuous_scale="RdYlGn",
     )
     fig.update_layout(
         title=f"Avg AUROC per Method x Model — {id_ds}",
@@ -210,86 +208,102 @@ def plot_model_corr_heatmap(df, id_ds):
     return fig
 
 
-def plot_activation_shaping_boxplots(df, id_ds):
-    # 1) pull hyper_mode out of the (…)-suffix, defaulting to "none"
+def plot_activation_shaping_boxplots(df, id_ds, ood_group="near"):
+    # 1) Extract pure modes from method_label
     df2 = df.copy()
-    df2["hyper_mode"] = (
-        df2["method_label"]
-        .str.extract(r"\((.*)\)$")[0]  # grabs “react”, “ash”, “scale”, or combos
-        .fillna("none")  # rows with no (…) become “none”
-    )
-    # 2) keep only the four pure modes
+    df2["hyper_mode"] = df2["method_label"].str.extract(r"\((.*)\)$")[0].fillna("none")
     df2 = df2[df2["hyper_mode"].isin(["none", "react", "ash", "scale"])]
-
-    # 3) strip off the suffix to get the base method name
     df2["base_method"] = df2["method_label"].str.replace(r" \(.+\)$", "", regex=True)
 
-    # 4) limit to just the methods that actually support shaping
-    shaped = df2[df2["hyper_mode"] != "none"]["base_method"].unique()
-    df2 = df2[df2["base_method"].isin(shaped)]
+    # 2) Keep only methods that support shaping
+    shaped_methods = sorted(df2[df2["hyper_mode"] != "none"]["base_method"].unique())
+    df2 = df2[df2["base_method"].isin(shaped_methods)]
 
-    # 5) for each (base_method, hyper_mode, model), pick the run with max “near”
+    # 3) Pick best near‐AUROC per (base_method, hyper_mode, model)
     best = df2.sort_values("near", ascending=False).drop_duplicates(
-        subset=["base_method", "hyper_mode", "model"],
-        keep="first",
+        subset=["base_method", "hyper_mode", "model"], keep="first"
     )
 
-    # 6) box-plot: x=mode, y=near, one facet per base method
+    # 4) Compute Δ near = near – baseline(none) for each (base_method, model)
+    baseline = (
+        best[best.hyper_mode == "none"]
+        .set_index(["base_method", "model"])[ood_group]
+        .rename("baseline")
+    )
+    best = (
+        best.set_index(["base_method", "model"])
+        .join(baseline, how="left")
+        .reset_index()
+    )
+    best["delta"] = best[ood_group] - best["baseline"]
+
+    # 5) Remove the “none” baseline (all zeros) and plot
+    best = best[best.hyper_mode != "none"]
+    modes = ["react", "ash", "scale"]
+
     fig = px.box(
         best,
         x="hyper_mode",
-        y="near",
+        y="delta",
         color="hyper_mode",
         facet_col="base_method",
-        category_orders={"hyper_mode": ["none", "react", "ash", "scale"]},
-        labels={"near": "Near AUROC", "hyper_mode": "Mode"},
-        title=f"Activation‐Shaping Effect (Near AUROC) — {id_ds}",
+        # facet_col_wrap=per_row,
+        category_orders={"hyper_mode": modes},
+        labels={"delta": f"Δ {ood_group.capitalize()} AUROC", "hyper_mode": "Mode"},
+        title=f"Activation-Shaping Impact (Δ {ood_group.capitalize()} AUROC) — {id_ds}",
     )
-    fig.update_layout(
-        showlegend=True,
-        height=400,
-    )
+    fig.update_layout(showlegend=True, height=300)
 
-    # 7) clean up facet titles
+    # clean up facet titles
     for anno in fig.layout.annotations:
         anno.text = anno.text.replace("base_method=", "")
+
     return fig
 
 
 def plot_layerpack_boxplots(df, id_ds, ood_group="near"):
-    # 1) keep only the three feature‐layer‐pack modes
+    # 1) Filter for the three layer_pack modes
     packs = ["penultimate", "partial", "full"]
     df2 = df[df["layer_pack"].isin(packs)].copy()
 
-    # 2) for each (method_label, layer_pack, model), take the run with max near AUROC
-    best = df2.sort_values(ood_group, ascending=False).drop_duplicates(
-        subset=["method_label", "layer_pack", "model"],
-        keep="first",
+    # 2) For each (method_label, layer_pack, model), pick best near‐AUROC
+    best = df2.sort_values("near", ascending=False).drop_duplicates(
+        subset=["method_label", "layer_pack", "model"], keep="first"
     )
 
-    # 3) build a faceted boxplot: x=layer_pack, y=near, one facet per method
+    # 3) Compute Δ auroc = auroc – baseline(penultimate) per (method_label, model)
+    baseline = (
+        best[best.layer_pack == "penultimate"]
+        .set_index(["method_label", "model"])[ood_group]
+        .rename("baseline")
+    )
+    best = (
+        best.set_index(["method_label", "model"])
+        .join(baseline, how="left")
+        .reset_index()
+    )
+    best["delta"] = best[ood_group] - best["baseline"]
+
+    # 4) Faceted boxplot of Δ auroc by layer_pack
+    best = best[best.layer_pack != "penultimate"]
+    packs_cats = [p for p in best.layer_pack.unique() if p != "penultimate"]
+    packs_cats.sort(key=lambda p: (p != "partial", p != "full"))
     fig = px.box(
         best,
         x="layer_pack",
-        y=ood_group,
+        y="delta",
         color="layer_pack",
         facet_col="method_label",
-        # facet_col_wrap=per_row,
-        category_orders={"layer_pack": packs},
+        category_orders={"layer_pack": packs_cats},
         labels={
-            ood_group: f"{ood_group.capitalize()} AUROC",
-            "layer_pack": "Layer Pack",
+            "delta": f"Δ {ood_group.capitalize()} AUROC",
+            "layer_pack": "Layers",
         },
-        title=f"Feature‐Layer‐Pack Effect ({ood_group.capitalize()} AUROC) — {id_ds}",
+        title=f"Layer-Pack Impact (Δ {ood_group.capitalize()} AUROC) — {id_ds}",
     )
+    fig.update_layout(showlegend=True, height=300)
 
-    # 4) adjust layout so facets wrap and height scales with number of rows
-    fig.update_layout(
-        showlegend=True,
-        height=300,
-    )
-
-    # 5) clean up facet titles
+    # clean up facet titles
     for anno in fig.layout.annotations:
         anno.text = anno.text.replace("method_label=", "")
 
@@ -418,43 +432,59 @@ with tab3:
 
     # exp 2: activation shaping effect
     st.markdown("---")
-    st.markdown(r"#### Exp 2: Activation‐Shaping Effect (Near AUROC)")
+    st.markdown("#### Exp 2: Activation‐Shaping Impact (Δ Near & Far AUROC)")
     st.markdown(
         r"""
-    For each logit-based method $k$ and each shaping mode $\displaystyle
-    m\in\{\text{none},\text{react},\text{ash},\text{scale}\}$, define for
-                each model $i$:
+    For each logit-based method $k$ and each shaping mode 
+    $m \in \{\mathrm{react}, \mathrm{ash}, \mathrm{scale}\}$, define for each model $i$:
+
     $$
-    v_{i,k,m} \;=\; 
-                \mathrm{AUROC}_{\text{near}}\bigl(\text{model}_i,
-                \text{method}_k,m\bigr).
+    \Delta v_{i,k,m}
+    =
+    \mathrm{AUROC}(\mathrm{model}_i, k, m)
+    -
+    \mathrm{AUROC}(\mathrm{model}_i, k, \mathrm{none}).
     $$
-    We then draw boxplots of the distributions $\{v_{i,k,m}\}_i$ across models,
-    comparing the four modes side by side for each method.
+
+    We then draw boxplots of the distributions $\{\Delta v_{i,k,m}\}_i$ 
+    across models, comparing each mode against the no‐shaping baseline.
     """
     )
     st.plotly_chart(
-        plot_activation_shaping_boxplots(filtered, id_ds), use_container_width=True
+        plot_activation_shaping_boxplots(filtered, id_ds, "near"),
+        use_container_width=True,
+    )
+    st.plotly_chart(
+        plot_activation_shaping_boxplots(filtered, id_ds, "far"),
+        use_container_width=True,
     )
 
-    # exp 3: feature-layer-pack effect
+    # exp 3: layer-pack impact
     st.markdown("---")
-    st.markdown(r"#### Exp 3: Layer-wise Score Aggregation Effect (Near and Far AUROC)")
-    st.markdown(
-        r"""
-    For each feature-based method $k$ and each layer-pack mode
-    $\displaystyle p\in\{\text{penultimate},\;\text{partial},\;\text{full}\}$, define
-    for each model $i$:
+    st.markdown("#### Exp 3: Layer-Pack Impact (Δ Near & Far AUROC)")
+
+    st.markdown(r"""
+    For each feature-based method $k$ and each layer‐pack mode 
+    $p \in \{\mathrm{penultimate}, \mathrm{partial}, \mathrm{full}\}$, we define:
+
+    - **penultimate**: OOD scores computed **only** on the penultimate layer’s features.
+    - **partial**: OOD scores computed on a **subset** of late feature layers, then 
+                **aggregated** via a combination of p-values using Fisher test.
+    - **full**: OOD scores computed on **all major block outputs**, then aggregated by
+                the same p-value combination as above.
+
+    For each model $i$, let
     $$
-    v_{i,k,p}
-    \;=\;
-    \mathrm{AUROC}\bigl(\text{model}_i,
-    \text{method}_k,\text{layer\_pack}=p\bigr).
+    \Delta v_{i,k,p}
+    =
+    \mathrm{AUROC}(\mathrm{model}_i, k, p)
+    -
+    \mathrm{AUROC}(\mathrm{model}_i, k, \mathrm{penultimate}).
     $$
-    We then draw boxplots of the distributions $\{v_{i,k,p}\}_i$ across models,
-    comparing the three layer-pack modes side by side for each method.
-    """
-    )
+
+    We then draw boxplots of the distributions $\{\Delta v_{i,k,p}\}_i$ across models,
+                comparing **partial** and **full** against the penultimate baseline.
+    """)
     st.plotly_chart(
         plot_layerpack_boxplots(filtered, id_ds, "near"), use_container_width=True
     )
