@@ -86,6 +86,19 @@ def filter_leaderboard(df, models, methods, packs, search):
     return out
 
 
+def sanitize(x):
+    """
+    Sanitize a Python object for YAML serialization.
+    """
+    if isinstance(x, np.ndarray):
+        return x.tolist()
+    if isinstance(x, dict):
+        return {k: sanitize(v) for k, v in x.items() if v is not None}
+    if isinstance(x, list):
+        return [sanitize(v) for v in x if v is not None]
+    return x
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Plotting helpers
 # ──────────────────────────────────────────────────────────────────────
@@ -204,7 +217,11 @@ def plot_model_corr_heatmap(df, id_ds):
         title=f"Model vs Model Rank-Correlation — {id_ds}",
         xaxis_tickangle=-45,
         margin=dict(l=80, t=50, b=50),
+        height=500,
     )
+    # make sure the heatmap is square
+    fig.update_xaxes(scaleanchor="y", constrain="domain")
+    fig.update_yaxes(scaleanchor="x", constrain="domain")
     return fig
 
 
@@ -365,15 +382,6 @@ with tab1:
     )
     st.dataframe(styled, height=800, use_container_width=True)
 
-    def sanitize(x):
-        if isinstance(x, np.ndarray):
-            return x.tolist()
-        if isinstance(x, dict):
-            return {k: sanitize(v) for k, v in x.items() if v is not None}
-        if isinstance(x, list):
-            return [sanitize(v) for v in x if v is not None]
-        return x
-
     # Run‐config viewer
     st.markdown("**Run Configuration**")
     sel = st.selectbox("Select UID", filtered["uid"])
@@ -463,7 +471,8 @@ with tab3:
     st.markdown("---")
     st.markdown("#### Exp 3: Layer-Pack Impact (Δ Near & Far AUROC)")
 
-    st.markdown(r"""
+    st.markdown(
+        r"""
     For each feature-based method $k$ and each layer‐pack mode 
     $p \in \{\mathrm{penultimate}, \mathrm{partial}, \mathrm{full}\}$, we define:
 
@@ -484,7 +493,8 @@ with tab3:
 
     We then draw boxplots of the distributions $\{\Delta v_{i,k,p}\}_i$ across models,
                 comparing **partial** and **full** against the penultimate baseline.
-    """)
+    """
+    )
     st.plotly_chart(
         plot_layerpack_boxplots(filtered, id_ds, "near"), use_container_width=True
     )
