@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objs as go
 import yaml
 import math
+import glob
 
 from src.utils import load_benchmark
 
@@ -15,6 +16,14 @@ from src.utils import load_benchmark
 @st.cache_data
 def load_raw_results():
     return load_benchmark("reduced_results/*.parquet")
+
+
+@st.cache_data
+def load_evals():
+    # Load ID‐accuracy parquets (preserves id_dataset and model)
+    acc_files = glob.glob("evaluate_models/*.parquet")
+    df_acc = pd.concat([pd.read_parquet(f) for f in acc_files], ignore_index=True)
+    return df_acc
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -131,11 +140,15 @@ def plot_scatter_pareto(df, id_ds):
             name="Pareto front",
         )
     )
+
     return fig
 
 
 def plot_box(df):
-    melt = df.melt(
+    best = df.sort_values("near", ascending=False).drop_duplicates(
+        subset=["model", "method_label"], keep="first"
+    )
+    melt = best.melt(
         id_vars=["method_label"],
         value_vars=["near", "far"],
         var_name="OOD-type",
@@ -153,7 +166,11 @@ def plot_box(df):
 
 def plot_heatmap_plotly(df, id_ds):
     # build pivoted avg table
-    heat = df.assign(avg=df[["near", "far"]].mean(axis=1)).pivot_table(
+    best = df.sort_values("near", ascending=False).drop_duplicates(
+        subset=["model", "method_label"], keep="first"
+    )
+
+    heat = best.assign(avg=df[["near", "far"]].mean(axis=1)).pivot_table(
         index="method_label",
         columns="model",
         values="avg",
@@ -178,16 +195,23 @@ def plot_heatmap_plotly(df, id_ds):
 
 
 def plot_small_multiples(df):
-    return px.scatter(
+    num_rows = math.ceil(len(df.model.unique()) / 3)
+    fig = px.scatter(
         df,
         x="near",
         y="far",
         facet_col="model",
         facet_col_wrap=3,
         color="method_label",
-        height=800,
+        height=300 * num_rows,
         title="Near vs Far AUROC by Model (small multiples)",
+        # range_x=[0, 1],
+        # range_y=[0, 1],
     )
+    # cleanup facet titles
+    for anno in fig.layout.annotations:
+        anno.text = anno.text.replace("model=", "")
+    return fig
 
 
 def plot_model_corr_heatmap(df, id_ds):
@@ -327,6 +351,31 @@ def plot_layerpack_boxplots(df, id_ds, ood_group="near"):
     return fig
 
 
+def plot_id_accuracy_vs_ood(df, eval_df, id_ds, ood_group="near"):
+    # max OOD AUROC per model
+    ood_summary = df.groupby("model", as_index=False)[ood_group].max()
+    df_plot = eval_df.merge(ood_summary, on="model")
+    # compute spearman correlation
+    rho = df_plot["accuracy"].corr(df_plot[ood_group], method="spearman")
+    # scatter
+    fig = px.scatter(
+        df_plot,
+        x="accuracy",
+        y=ood_group,
+        color="model",
+        text="model",
+        labels={
+            "accuracy": "ID Accuracy",
+            ood_group: f"Max {ood_group.capitalize()} OOD AUROC",
+        },
+        title=f"ID vs OOD Performance ({ood_group.capitalize()}):"
+        f" Spearman ρ = {rho:.2f} — {id_ds} ",
+        trendline="ols",
+    )
+    fig.update_traces(textposition="top center", showlegend=True)
+    return fig
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Streamlit layout
 # ──────────────────────────────────────────────────────────────────────
@@ -342,6 +391,8 @@ id_ds = st.sidebar.selectbox(
 
 tables = build_all_leaderboards()
 df = tables[id_ds]
+eval_df = load_evals()
+eval_df = eval_df[eval_df["dataset"] == id_ds]
 
 st.sidebar.header("Filters")
 search = st.sidebar.text_input("Search")
@@ -500,4 +551,28 @@ with tab3:
     )
     st.plotly_chart(
         plot_layerpack_boxplots(filtered, id_ds, "far"), use_container_width=True
+    )
+
+    # exp 4: id accuracy vs max OOD AUROC
+    st.markdown("---")
+    # Exp 4: In-Distribution Accuracy vs. Max OOD AUROC
+    st.markdown("#### Exp 4: In-Distribution Accuracy vs. Max OOD AUROC")
+    st.markdown(r"""
+    Define for each model $i$:
+    $$
+    M_i = \max_{k}\,\mathrm{AUROC}(\text{model}_i, \text{method}_k),\quad 
+    \mathrm{Acc}_i = \text{ID Accuracy}(\text{model}_i).
+    $$
+    We then plot $ M_i $ against $ \mathrm{Acc}_i $, and report Spearman’s correlation
+                $\rho$ to examine the relationship between in-distribution accuracy and
+                OOD robustness.
+    """)
+
+    st.plotly_chart(
+        plot_id_accuracy_vs_ood(filtered, eval_df, id_ds, "near"),
+        use_container_width=True,
+    )
+    st.plotly_chart(
+        plot_id_accuracy_vs_ood(filtered, eval_df, id_ds, "far"),
+        use_container_width=True,
     )
