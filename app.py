@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objs as go
+from plotly.colors import qualitative
 import yaml
 import math
 import glob
@@ -297,6 +298,13 @@ def plot_activation_shaping_boxplots(df, id_ds, ood_group="near"):
     )
     fig.update_layout(showlegend=True, height=300)
 
+    # add a horizontal line at y=0
+    fig.add_hline(y=0, line_color="black", line_width=1, line_dash="dash", opacity=0.3)
+
+    # set y-axis limits to 1% and 99% quantiles
+    lo, hi = best["delta"].quantile([0.01, 0.99])
+    fig.update_yaxes(range=[lo, hi])
+
     # clean up facet titles
     for anno in fig.layout.annotations:
         anno.text = anno.text.replace("base_method=", "")
@@ -347,6 +355,13 @@ def plot_layerpack_boxplots(df, id_ds, ood_group="near"):
     )
     fig.update_layout(showlegend=True, height=300)
 
+    # add a horizontal line at y=0
+    fig.add_hline(y=0, line_color="black", line_width=1, line_dash="dash", opacity=0.3)
+
+    # set y-axis limits to 1% and 99% quantiles
+    lo, hi = best["delta"].quantile([0.01, 0.99])
+    fig.update_yaxes(range=[lo, hi])
+
     # clean up facet titles
     for anno in fig.layout.annotations:
         anno.text = anno.text.replace("method_label=", "")
@@ -380,73 +395,78 @@ def plot_id_accuracy_vs_ood(df, eval_df, id_ds, ood_group="near"):
     return fig
 
 
+def plot_method_rank_stats_grouped(df, id_ds):
+    # compute mean & std of ranks for both near and far
+    stats = {}
+    for grp in ["near", "far"]:
+        best = df.sort_values(grp, ascending=False).drop_duplicates(
+            subset=["model", "method_label"], keep="first"
+        )
+        # only base methods (no “(…)” suffix)
+        best_base = best[~best["method_label"].str.contains(r"\(")].copy()
+        pivot = best_base.pivot(index="model", columns="method_label", values=grp)
+        ranks = pivot.rank(axis=1, method="average", ascending=False)
+        stats[grp] = {
+            "mean": ranks.mean(axis=0),
+            "std": ranks.std(axis=0),
+        }
+
+    # sort methods by mean near‐rank ascending (best on left)
+    mean_near = stats["near"]["mean"].sort_values()
+    methods = mean_near.index.tolist()
+    near_mean = mean_near.values
+    near_std = stats["near"]["std"][methods].values
+    far_mean = stats["far"]["mean"][methods].values
+    far_std = stats["far"]["std"][methods].values
+
+    # Colors: Set2 palette (colorblind friendly)
+    colors = qualitative.Set2
+    near_color = colors[0]  # e.g. '#66c2a5'
+    far_color = colors[1]  # e.g. '#fc8d62'
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=methods,
+            y=near_mean,
+            name="Near mean rank",
+            error_y=dict(type="data", array=near_std, thickness=1.5, width=2),
+            marker=dict(color=near_color),
+            width=0.35,
+        )
+    )
+    fig.add_trace(
+        go.Bar(
+            x=methods,
+            y=far_mean,
+            name="Far mean rank",
+            error_y=dict(type="data", array=far_std, thickness=1.5, width=2),
+            marker=dict(color=far_color),
+            width=0.35,
+        )
+    )
+
+    fig.update_layout(
+        title=f"Method Rank Variability — {id_ds}",
+        barmode="group",
+        bargap=0.2,
+        bargroupgap=0.1,
+        xaxis=dict(
+            title="Method (sorted by near mean ↑)", tickangle=-45, automargin=True
+        ),
+        yaxis=dict(title="Mean rank (↓ best)"),
+        # move legend above the plot, centered
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+        margin=dict(l=50, r=50, t=80, b=150),  # extra top margin for legend
+        # height=400 + 30 * len(methods),
+    )
+
+    return fig
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Export figures helper
 # ──────────────────────────────────────────────────────────────────────
-
-
-# def chart_with_download(fig, key, default_width=700, default_height=400):
-#     """
-#     Render the interactive Plotly figure, and inside an expander labeled
-#     “Export figure” put compact controls for width/height plus a 300 DPI PNG download.
-#     The export-specific layout tweaks (template, fonts, margins, line widths)
-#     are applied only to the copy used for PNG, leaving the on-screen chart untouched.
-#     """
-#     # 1) Show interactive figure unchanged
-#     st.plotly_chart(fig, use_container_width=True)
-
-#     # 2) Export controls inside spoiler
-#     with st.expander("Export figure"):
-#         c1, c2, c3 = st.columns([1, 1, 0.6], gap="small")
-#         width = c1.number_input(
-#             "Width (px)",
-#             min_value=100,
-#             value=default_width,
-#             key=f"{key}_w",
-#             help="Export width in pixels",
-#         )
-#         height = c2.number_input(
-#             "Height (px)",
-#             min_value=100,
-#             value=default_height,
-#             key=f"{key}_h",
-#             help="Export height in pixels",
-#         )
-
-#         # 3) Clone fig for export and apply NeurIPS‐style layout
-#         fig_export = copy.deepcopy(fig)
-#         fig_export.update_layout(
-#             template="plotly_white",
-#             font=dict(family="serif", size=12),
-#             legend=dict(font=dict(size=10)),
-#             margin=dict(l=50, r=50, t=50, b=50),
-#         )
-#         for trace in fig_export.data:
-#             if hasattr(trace, "line") and trace.line is not None:
-#                 trace.line.width = 1.5
-#             if hasattr(trace, "marker") and trace.marker is not None:
-#                 ms = getattr(trace.marker, "size", None)
-#                 if isinstance(ms, (int, float)):
-#                     trace.marker.size = max(ms, 8)
-
-#         # 4) Export PNG @300 DPI via Kaleido
-#         img_bytes = fig_export.to_image(
-#             format="png",
-#             engine="kaleido",
-#             width=width,
-#             height=height,
-#             scale=300 / 72,  # ≈4.17
-#         )
-
-#         # 5) Download button on the same line
-#         c3.download_button(
-#             label="⬇️ PNG (300 DPI)",
-#             data=img_bytes,
-#             file_name=f"{key}.png",
-#             mime="image/png",
-#             key=f"{key}_dl",
-#             help=f"Download {width}×{height}px @300 DPI",
-#         )
 
 
 def chart_with_download(fig, key, default_width=700, default_height=400):
@@ -668,9 +688,31 @@ with tab3:
         default_height=700,
     )
 
-    # exp 2: activation shaping effect
+    # exp 2: method ranking variability
     st.markdown("---")
-    st.markdown("#### Exp 2: Activation‐Shaping Impact (Δ Near & Far AUROC)")
+    st.markdown("#### Exp 2: Method Ranking Variability (Near & Far)")
+    st.markdown(
+        r"""
+    For each base method $k$ and model $i$, let
+    $$
+    v_{i,k} = \max_{\text{layer\_pack}} \mathrm{AUROC}(\text{model}_i, k).
+    $$
+    Convert each score vector $\{v_{i,k}\}_k$ into ranks $r_{i,k}$ (1 = best).
+    We then plot, for each method $k$, the mean rank $\mathbb{E}_i[r_{i,k}]$ with
+        error bars showing the rank’s standard deviation across models, separately
+        for Near and Far.
+    """
+    )
+    chart_with_download(
+        plot_method_rank_stats_grouped(filtered, id_ds),
+        key=f"{id_ds}_method_ranking_both",
+        default_width=700,
+        default_height=400,
+    )
+
+    # exp 3: activation shaping effect
+    st.markdown("---")
+    st.markdown("#### Exp 3: Activation‐Shaping Impact (Δ Near & Far AUROC)")
     st.markdown(
         r"""
     For each logit-based method $k$ and each shaping mode 
@@ -702,9 +744,9 @@ with tab3:
         default_height=400,
     )
 
-    # exp 3: layer-pack impact
+    # exp 4: layer-pack impact
     st.markdown("---")
-    st.markdown("#### Exp 3: Layer-Pack Impact (Δ Near & Far AUROC)")
+    st.markdown("#### Exp 4: Layer-Pack Impact (Δ Near & Far AUROC)")
 
     st.markdown(
         r"""
@@ -743,18 +785,17 @@ with tab3:
         default_height=400,
     )
 
-    # exp 4: id accuracy vs max OOD AUROC
     st.markdown("---")
-    # Exp 4: In-Distribution Accuracy vs. Max OOD AUROC
-    st.markdown("#### Exp 4: In-Distribution Accuracy vs. Max OOD AUROC")
+    # Exp 5: In-Distribution Accuracy vs. Max OOD AUROC
+    st.markdown("#### Exp 5: In-Distribution Accuracy vs. Max OOD AUROC")
     st.markdown(
         r"""
     Define for each model $i$:
     $$
-    M_i = \max_{k}\,\mathrm{AUROC}(\text{model}_i, \text{method}_k),\quad 
+    v_i = \max_{k}\,\mathrm{AUROC}(\text{model}_i, \text{method}_k),\quad 
     \mathrm{Acc}_i = \text{ID Accuracy}(\text{model}_i).
     $$
-    We then plot $ M_i $ against $ \mathrm{Acc}_i $, and report Spearman’s correlation
+    We then plot $ v_i $ against $ \mathrm{Acc}_i $, and report Spearman’s correlation
                 $\rho$ to examine the relationship between in-distribution accuracy and
                 OOD robustness.
     """
