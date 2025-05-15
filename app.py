@@ -6,6 +6,7 @@ import plotly.graph_objs as go
 import yaml
 import math
 import glob
+import copy
 
 from src.utils import load_benchmark
 
@@ -121,6 +122,7 @@ def plot_scatter_pareto(df, id_ds):
         hover_data=["uid", "layer_pack"],
         labels={"near": "Near AUROC", "far": "Far AUROC"},
         title=f"Near vs Far AUROC — {id_ds}",
+        color_discrete_sequence=px.colors.qualitative.Plotly,
     )
     # compute Pareto front
     pts = df[["near", "far"]].drop_duplicates().sort_values("near", ascending=False)
@@ -205,8 +207,7 @@ def plot_small_multiples(df):
         color="method_label",
         height=300 * num_rows,
         title="Near vs Far AUROC by Model (small multiples)",
-        # range_x=[0, 1],
-        # range_y=[0, 1],
+        color_discrete_sequence=px.colors.qualitative.Plotly,
     )
     # cleanup facet titles
     for anno in fig.layout.annotations:
@@ -292,6 +293,7 @@ def plot_activation_shaping_boxplots(df, id_ds, ood_group="near"):
         category_orders={"hyper_mode": modes},
         labels={"delta": f"Δ {ood_group.capitalize()} AUROC", "hyper_mode": "Mode"},
         title=f"Activation-Shaping Impact (Δ {ood_group.capitalize()} AUROC) — {id_ds}",
+        color_discrete_sequence=px.colors.qualitative.Plotly,
     )
     fig.update_layout(showlegend=True, height=300)
 
@@ -341,6 +343,7 @@ def plot_layerpack_boxplots(df, id_ds, ood_group="near"):
             "layer_pack": "Layers",
         },
         title=f"Layer-Pack Impact (Δ {ood_group.capitalize()} AUROC) — {id_ds}",
+        color_discrete_sequence=px.colors.qualitative.Plotly,
     )
     fig.update_layout(showlegend=True, height=300)
 
@@ -371,9 +374,158 @@ def plot_id_accuracy_vs_ood(df, eval_df, id_ds, ood_group="near"):
         title=f"ID vs OOD Performance ({ood_group.capitalize()}):"
         f" Spearman ρ = {rho:.2f} — {id_ds} ",
         trendline="ols",
+        color_discrete_sequence=px.colors.qualitative.Plotly,
     )
     fig.update_traces(textposition="top center", showlegend=True)
     return fig
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Export figures helper
+# ──────────────────────────────────────────────────────────────────────
+
+
+# def chart_with_download(fig, key, default_width=700, default_height=400):
+#     """
+#     Render the interactive Plotly figure, and inside an expander labeled
+#     “Export figure” put compact controls for width/height plus a 300 DPI PNG download.
+#     The export-specific layout tweaks (template, fonts, margins, line widths)
+#     are applied only to the copy used for PNG, leaving the on-screen chart untouched.
+#     """
+#     # 1) Show interactive figure unchanged
+#     st.plotly_chart(fig, use_container_width=True)
+
+#     # 2) Export controls inside spoiler
+#     with st.expander("Export figure"):
+#         c1, c2, c3 = st.columns([1, 1, 0.6], gap="small")
+#         width = c1.number_input(
+#             "Width (px)",
+#             min_value=100,
+#             value=default_width,
+#             key=f"{key}_w",
+#             help="Export width in pixels",
+#         )
+#         height = c2.number_input(
+#             "Height (px)",
+#             min_value=100,
+#             value=default_height,
+#             key=f"{key}_h",
+#             help="Export height in pixels",
+#         )
+
+#         # 3) Clone fig for export and apply NeurIPS‐style layout
+#         fig_export = copy.deepcopy(fig)
+#         fig_export.update_layout(
+#             template="plotly_white",
+#             font=dict(family="serif", size=12),
+#             legend=dict(font=dict(size=10)),
+#             margin=dict(l=50, r=50, t=50, b=50),
+#         )
+#         for trace in fig_export.data:
+#             if hasattr(trace, "line") and trace.line is not None:
+#                 trace.line.width = 1.5
+#             if hasattr(trace, "marker") and trace.marker is not None:
+#                 ms = getattr(trace.marker, "size", None)
+#                 if isinstance(ms, (int, float)):
+#                     trace.marker.size = max(ms, 8)
+
+#         # 4) Export PNG @300 DPI via Kaleido
+#         img_bytes = fig_export.to_image(
+#             format="png",
+#             engine="kaleido",
+#             width=width,
+#             height=height,
+#             scale=300 / 72,  # ≈4.17
+#         )
+
+#         # 5) Download button on the same line
+#         c3.download_button(
+#             label="⬇️ PNG (300 DPI)",
+#             data=img_bytes,
+#             file_name=f"{key}.png",
+#             mime="image/png",
+#             key=f"{key}_dl",
+#             help=f"Download {width}×{height}px @300 DPI",
+#         )
+
+
+def chart_with_download(fig, key, default_width=700, default_height=400):
+    """
+    Render the interactive Plotly figure, and inside an expander labeled
+    “Export figure” put width/height inputs and PNG/PDF download buttons.
+    The export-specific layout tweaks are applied only to the clone.
+    """
+    # 1) Show interactive figure unchanged
+    st.plotly_chart(fig, use_container_width=True)
+
+    # 2) Export controls inside spoiler
+    with st.expander("Export figure"):
+        c1, c2, c3, c4 = st.columns([1, 1, 0.6, 0.6], gap="small")
+
+        width = c1.number_input(
+            "Width (px)",
+            min_value=100,
+            value=default_width,
+            key=f"{key}_w",
+            help="Export width in pixels",
+        )
+        height = c2.number_input(
+            "Height (px)",
+            min_value=100,
+            value=default_height,
+            key=f"{key}_h",
+            help="Export height in pixels",
+        )
+
+        # 3) Clone fig and apply NeurIPS-style layout
+        fig_export = copy.deepcopy(fig)
+        fig_export.update_layout(
+            template="plotly_white",
+            font=dict(family="serif", size=12),
+            legend=dict(font=dict(size=10)),
+            margin=dict(l=50, r=50, t=50, b=50),
+        )
+        for trace in fig_export.data:
+            if hasattr(trace, "line") and trace.line is not None:
+                trace.line.width = 1.5
+            if hasattr(trace, "marker") and trace.marker is not None:
+                ms = getattr(trace.marker, "size", None)
+                if isinstance(ms, (int, float)):
+                    trace.marker.size = max(ms, 8)
+
+        # 4) Generate PNG @300 DPI
+        png_bytes = fig_export.to_image(
+            format="png",
+            engine="kaleido",
+            width=width,
+            height=height,
+            scale=300 / 72,  # ≈4.17 for 300 DPI
+        )
+        # 5) Generate vector PDF
+        pdf_bytes = fig_export.to_image(
+            format="pdf",
+            engine="kaleido",
+            width=width,
+            height=height,
+        )
+
+        # 6) Download buttons
+        c3.download_button(
+            label="⬇️ PNG",
+            data=png_bytes,
+            file_name=f"{key}.png",
+            mime="image/png",
+            key=f"{key}_dl_png",
+            help=f"Download {width}×{height}px @300 DPI",
+        )
+        c4.download_button(
+            label="⬇️ PDF",
+            data=pdf_bytes,
+            file_name=f"{key}.pdf",
+            mime="application/pdf",
+            key=f"{key}_dl_pdf",
+            help="Download vector PDF",
+        )
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -457,16 +609,37 @@ with tab2:
         "- **Small multiples:** per-model scatter facets."
     )
     st.markdown(r"#### Scatter with Pareto front")
-    st.plotly_chart(plot_scatter_pareto(filtered, id_ds), use_container_width=True)
+    chart_with_download(
+        plot_scatter_pareto(filtered, id_ds),
+        key=f"{id_ds}_scatter_pareto",
+        default_width=700,
+        default_height=400,
+    )
 
     st.markdown(r"#### Near vs Far AUROC Boxplot")
-    st.plotly_chart(plot_box(filtered), use_container_width=True)
+    chart_with_download(
+        plot_box(filtered),
+        key=f"{id_ds}_boxplot_near_far",
+        default_width=700,
+        default_height=400,
+    )
 
     st.markdown(r"#### Method x Model Avg AUROC Heatmap")
-    st.plotly_chart(plot_heatmap_plotly(filtered, id_ds), use_container_width=True)
+    chart_with_download(
+        plot_heatmap_plotly(filtered, id_ds),
+        key=f"{id_ds}_heatmap_avg_auroc",
+        default_width=700,
+        default_height=700,
+    )
 
     st.markdown(r"#### Small Multiples by Model")
-    st.plotly_chart(plot_small_multiples(filtered), use_container_width=True)
+    chart_with_download(
+        plot_small_multiples(filtered),
+        key=f"{id_ds}_small_multiples",
+        default_width=700,
+        default_height=800,
+    )
+
 
 with tab3:
     # exp 1: model vs model rank-correlation
@@ -487,7 +660,13 @@ with tab3:
         and display the matrix $\{\rho_{ij}\}$ in a **Model Correlation Heatmap**.
         """
     )
-    st.plotly_chart(plot_model_corr_heatmap(filtered, id_ds), use_container_width=True)
+
+    chart_with_download(
+        plot_model_corr_heatmap(filtered, id_ds),
+        key=f"{id_ds}_model_corr",
+        default_width=700,
+        default_height=700,
+    )
 
     # exp 2: activation shaping effect
     st.markdown("---")
@@ -509,13 +688,18 @@ with tab3:
     across models, comparing each mode against the no‐shaping baseline.
     """
     )
-    st.plotly_chart(
+
+    chart_with_download(
         plot_activation_shaping_boxplots(filtered, id_ds, "near"),
-        use_container_width=True,
+        key=f"{id_ds}_activation_shaping_near",
+        default_width=700,
+        default_height=400,
     )
-    st.plotly_chart(
+    chart_with_download(
         plot_activation_shaping_boxplots(filtered, id_ds, "far"),
-        use_container_width=True,
+        key=f"{id_ds}_activation_shaping_far",
+        default_width=700,
+        default_height=400,
     )
 
     # exp 3: layer-pack impact
@@ -546,18 +730,25 @@ with tab3:
                 comparing **partial** and **full** against the penultimate baseline.
     """
     )
-    st.plotly_chart(
-        plot_layerpack_boxplots(filtered, id_ds, "near"), use_container_width=True
+    chart_with_download(
+        plot_layerpack_boxplots(filtered, id_ds, "near"),
+        key=f"{id_ds}_layer_pack_near",
+        default_width=700,
+        default_height=400,
     )
-    st.plotly_chart(
-        plot_layerpack_boxplots(filtered, id_ds, "far"), use_container_width=True
+    chart_with_download(
+        plot_layerpack_boxplots(filtered, id_ds, "far"),
+        key=f"{id_ds}_layer_pack_far",
+        default_width=700,
+        default_height=400,
     )
 
     # exp 4: id accuracy vs max OOD AUROC
     st.markdown("---")
     # Exp 4: In-Distribution Accuracy vs. Max OOD AUROC
     st.markdown("#### Exp 4: In-Distribution Accuracy vs. Max OOD AUROC")
-    st.markdown(r"""
+    st.markdown(
+        r"""
     Define for each model $i$:
     $$
     M_i = \max_{k}\,\mathrm{AUROC}(\text{model}_i, \text{method}_k),\quad 
@@ -566,13 +757,17 @@ with tab3:
     We then plot $ M_i $ against $ \mathrm{Acc}_i $, and report Spearman’s correlation
                 $\rho$ to examine the relationship between in-distribution accuracy and
                 OOD robustness.
-    """)
-
-    st.plotly_chart(
-        plot_id_accuracy_vs_ood(filtered, eval_df, id_ds, "near"),
-        use_container_width=True,
+    """
     )
-    st.plotly_chart(
+    chart_with_download(
+        plot_id_accuracy_vs_ood(filtered, eval_df, id_ds, "near"),
+        key=f"{id_ds}_id_acc_vs_ood_near",
+        default_width=700,
+        default_height=400,
+    )
+    chart_with_download(
         plot_id_accuracy_vs_ood(filtered, eval_df, id_ds, "far"),
-        use_container_width=True,
+        key=f"{id_ds}_id_acc_vs_ood_far",
+        default_width=700,
+        default_height=400,
     )
