@@ -272,6 +272,12 @@ def main():
             model = get_model(
                 run["id_ds"], run["model"], device, run.get("source", None)
             )
+            # HOTFIX: SwinT model has a different resize size
+            # TODO: get kwargs from the model config
+            if run["model"] == "swin_t":
+                kwargs = {"pre_size": 232}
+            else:
+                kwargs = {}
 
             # 2) data ---------------------------------------------------
             id_fit_loader = get_dataloader(
@@ -281,6 +287,7 @@ def main():
                 batch_size=run["batch_size"],
                 num_workers=run["num_workers"],
                 fit_subset_cfg=load_yaml("datasets", run["id_ds"]).get("fit_subset"),
+                **kwargs,
             )
             id_test_loader = get_dataloader(
                 run["id_ds"],
@@ -307,6 +314,22 @@ def main():
                     fit_kw["postproc_fns"] = [lambda x: torch.mean(x, dim=1)] * (
                         num_layers - 1
                     ) + [lambda x: x[:, 0]]
+            if run["model"] == "swin_t":
+                from torchvision.ops.misc import Permute
+                import torch.nn as nn
+                from torchvision.transforms import Compose
+
+                num_layers = len(fit_kw["feature_layers_id"])
+                if num_layers >= 1:
+                    fit_kw["postproc_fns"] = [
+                        Compose(
+                            [
+                                Permute([0, 3, 1, 2]),
+                                nn.AdaptiveAvgPool2d(1),
+                                nn.Flatten(1),
+                            ]
+                        )
+                    ] * num_layers
 
             console.log(
                 r"Running \[uid=",

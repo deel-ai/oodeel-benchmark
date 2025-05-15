@@ -1,6 +1,4 @@
-# datasets:  [cifar10, cifar100, imagenet200, imagenet]
-# datasets: [cifar10, cifar100]
-datasets: [cifar10, cifar100, imagenet200]
+datasets:  [cifar10, cifar100, imagenet200, imagenet]
 methods:
   [
     dknn,
@@ -16,6 +14,6 @@ methods:
     she,
     vim,
   ]
-# methods: [odin]
+
 batch_size: 64
 num_workers: 8

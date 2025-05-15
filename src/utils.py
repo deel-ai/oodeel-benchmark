@@ -152,6 +152,9 @@ def get_model(dataset_name, model_name, device=None, source=None):
             model = models.vit_b_16(
                 weights=models.ViT_B_16_Weights.IMAGENET1K_SWAG_LINEAR_V1
             )
+        elif model_name == "swin_t":
+            assert dataset_name == "imagenet", "swin_t only supports imagenet"
+            model = models.swin_t(weights=models.Swin_T_Weights.IMAGENET1K_V1)
         elif model_name == "mobilenet_v2":
             assert dataset_name == "imagenet", "mobilenet_v2 only supports imagenet"
             model = models.mobilenet_v2(

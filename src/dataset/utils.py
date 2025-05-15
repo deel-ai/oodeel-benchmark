@@ -142,6 +142,7 @@ def get_dataset(
     split: str,
     preprocessor_dataset_name: str,
     root_dir: str = "/datasets/openood",
+    **kwargs,
 ):
     preprocessor = TestPreprocessor(preprocessor_dataset_name)
 
@@ -192,8 +193,11 @@ def get_dataloader(
     num_workers=8,
     root_dir="/datasets/openood",
     fit_subset_cfg=None,
+    **kwargs,
 ):
-    ds = get_dataset(dataset_name, split, preprocessor_dataset_name, root_dir=root_dir)
+    ds = get_dataset(
+        dataset_name, split, preprocessor_dataset_name, root_dir=root_dir, **kwargs
+    )
 
     # ---------- apply subset only for training split ----------
     if split == "train" and fit_subset_cfg:

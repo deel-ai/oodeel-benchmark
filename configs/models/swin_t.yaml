@@ -1,0 +1,18 @@
+architecture: swin_t
+source: torchvision
+
+# Canonical layer packs for ALL datasets that use vit_b16
+layer_packs:
+  full:
+    [
+      "features.1",
+      "features.2",
+      "features.3",
+      "features.4",
+      "features.5",
+      "features.6",
+      "features.7",
+    ]
+  penultimate: ["features.7"]
+  partial: ["features.4", "features.5", "features.6", "features.7"]
+  none: []

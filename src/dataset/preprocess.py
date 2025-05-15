@@ -33,11 +33,14 @@ class Convert:
 
 class TestPreprocessor:
 
-    def __init__(self, dataset_name: str):
+    def __init__(self, dataset_name: str, **kwargs):
         self.pre_size = images_pre_sizes[dataset_name]
         self.image_size = image_sizes[dataset_name]
         self.mean = normalization_dict[dataset_name][0]
         self.std = normalization_dict[dataset_name][1]
+
+        if kwargs.get("pre_size") is not None:
+            self.pre_size = kwargs["pre_size"]
 
         self.transform = tvs_trans.Compose(
             [
