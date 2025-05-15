@@ -402,8 +402,12 @@ def plot_method_rank_stats_grouped(df, id_ds):
         best = df.sort_values(grp, ascending=False).drop_duplicates(
             subset=["model", "method_label"], keep="first"
         )
-        # only base methods (no “(…)” suffix)
-        best_base = best[~best["method_label"].str.contains(r"\(")].copy()
+        # keep base methods AND energy variants with one shaping mode
+        is_base = ~best["method_label"].str.contains(r"\(")
+        is_energy_variant = best["method_label"].str.match(
+            r"^energy \((react|ash|scale)\)$"
+        )
+        best_base = best[is_base | is_energy_variant].copy()
         pivot = best_base.pivot(index="model", columns="method_label", values=grp)
         ranks = pivot.rank(axis=1, method="average", ascending=False)
         stats[grp] = {
