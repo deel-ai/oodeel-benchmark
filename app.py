@@ -4,6 +4,8 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objs as go
 from plotly.colors import qualitative
+from scipy.cluster.hierarchy import linkage, leaves_list
+from scipy.spatial.distance import squareform
 import yaml
 import math
 import glob
@@ -227,7 +229,15 @@ def plot_model_corr_heatmap(df, id_ds):
 
     # 3) Compute Spearman (rank) correlation between model-vectors
     #    .corr(method="spearman") works directly on the pivoted DataFrame
-    corr = pivot.T.corr(method="spearman")
+    corr = pivot.T.corr(method="spearman").fillna(0)
+
+    # Reorder methods using hierarchical clustering
+    if len(corr) > 1:
+        dist = 1 - corr
+        # condensed distance matrix for linkage
+        condensed = squareform(dist.values, checks=False)
+        order = leaves_list(linkage(condensed, method="average"))
+        corr = corr.iloc[order, order]
 
     # 4) Plot with Plotly
     fig = px.imshow(
@@ -246,6 +256,49 @@ def plot_model_corr_heatmap(df, id_ds):
         height=500,
     )
     # make sure the heatmap is square
+    fig.update_xaxes(scaleanchor="y", constrain="domain")
+    fig.update_yaxes(scaleanchor="x", constrain="domain")
+    return fig
+
+
+def plot_method_corr_heatmap(df, id_ds):
+    """Method vs Method rank-correlation heatmap."""
+    # 1) For each (model, method_label), keep run with highest near AUROC
+    best = df.sort_values("near", ascending=False).drop_duplicates(
+        subset=["model", "method_label"], keep="first"
+    )
+
+    # 2) Pivot so rows=models, cols=methods
+    pivot = best.pivot(index="model", columns="method_label", values="near")
+
+    # 3) Compute Spearman correlation between method vectors
+    corr = pivot.corr(method="spearman").fillna(0)
+
+    # Optionally reorder methods using hierarchical clustering
+    if len(corr) > 1:
+        dist = 1 - corr
+        # condensed distance matrix for linkage
+        condensed = squareform(dist.values, checks=False)
+        order = leaves_list(linkage(condensed, method="average"))
+        corr = corr.iloc[order, order]
+
+    # 4) Plot heatmap
+    fig = px.imshow(
+        corr,
+        text_auto=".2f",
+        labels={"x": "Method", "y": "Method", "color": "Spearman ρ"},
+        aspect="auto",
+        color_continuous_scale="YlGnBu_r",
+        zmin=0,
+        zmax=1,
+    )
+    fig.update_layout(
+        title=f"Method vs Method Rank-Correlation — {id_ds}",
+        xaxis_tickangle=-45,
+        margin=dict(l=150, t=50, b=50),
+        height=max(500, 20 * corr.shape[0]),
+    )
+    fig.update_yaxes(automargin=True)
     fig.update_xaxes(scaleanchor="y", constrain="domain")
     fig.update_yaxes(scaleanchor="x", constrain="domain")
     return fig
@@ -688,6 +741,31 @@ with tab3:
     chart_with_download(
         plot_model_corr_heatmap(filtered, id_ds),
         key=f"{id_ds}_model_corr",
+        default_width=700,
+        default_height=700,
+    )
+
+    # exp 1b: method vs method rank-correlation
+    st.markdown("---")
+    st.markdown(r"#### Exp 1b: Method vs Method Rank-Correlation Heatmap")
+    st.markdown(
+        r"""
+        For each method $k$ and model $i$, define the vector of best Near-OOD AUROCs across models:
+        $$
+        \mathbf{v}_k = \bigl[\,v_{1k},\,v_{2k},\,\dots\bigr], \quad
+        v_{ik} = \max_{\text{layer\_pack}}\mathrm{AUROC}_{\text{near}}\bigl(\text{model}_i, \text{method}_k\bigr).
+        $$
+        Compute Spearman’s rank-correlation
+        $$
+        \rho_{k\ell} = \mathrm{SpearmanCorr}\bigl(\mathbf{v}_k,\mathbf{v}_\ell\bigr)
+        $$
+        and visualize the matrix $\{\rho_{k\ell}\}$ in a **Method Correlation Heatmap**.
+        """
+    )
+
+    chart_with_download(
+        plot_method_corr_heatmap(filtered, id_ds),
+        key=f"{id_ds}_method_corr",
         default_width=700,
         default_height=700,
     )
