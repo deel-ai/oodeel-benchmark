@@ -584,7 +584,7 @@ filtered = filter_leaderboard(df, models, methods, packs, search)
 
 # Tabs
 tab1, tab2, tab3 = st.tabs(
-    ["🏆 Leaderboard", "📊 Visualizations", "📚 Paper Experiments [WIP]"]
+    ["🏆 Leaderboard", "📊 Visualizations", "📚 Paper Experiments"]
 )
 
 with tab1:
