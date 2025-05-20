@@ -1,8 +1,0 @@
-architecture: cifar100_vgg16_bn
-
-# Canonical layer packs for ALL datasets that use ResNet-18
-layer_packs:
-  full:        [features.2, features.9, features.16, features.26, features.32, features.39, features.42, classifier.5]
-  penultimate: [classifier.5]
-  partial:     [features.26, features.32, features.39, features.42, classifier.5]
-  none:        []
