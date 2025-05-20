@@ -4,6 +4,8 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objs as go
 from plotly.colors import qualitative
+from scipy.cluster.hierarchy import linkage, leaves_list
+from scipy.spatial.distance import squareform
 import yaml
 import math
 import glob
@@ -17,7 +19,7 @@ from src.utils import load_benchmark
 # ──────────────────────────────────────────────────────────────────────
 @st.cache_data
 def load_raw_results():
-    return load_benchmark("results/*.parquet")
+    return load_benchmark("reduced_results/*.parquet")
 
 
 @st.cache_data
@@ -227,7 +229,15 @@ def plot_model_corr_heatmap(df, id_ds):
 
     # 3) Compute Spearman (rank) correlation between model-vectors
     #    .corr(method="spearman") works directly on the pivoted DataFrame
-    corr = pivot.T.corr(method="spearman")
+    corr = pivot.T.corr(method="spearman").fillna(0)
+
+    # Reorder methods using hierarchical clustering
+    if len(corr) > 1:
+        dist = 1 - corr
+        # condensed distance matrix for linkage
+        condensed = squareform(dist.values, checks=False)
+        order = leaves_list(linkage(condensed, method="average"))
+        corr = corr.iloc[order, order]
 
     # 4) Plot with Plotly
     fig = px.imshow(
@@ -262,7 +272,15 @@ def plot_method_corr_heatmap(df, id_ds):
     pivot = best.pivot(index="model", columns="method_label", values="near")
 
     # 3) Compute Spearman correlation between method vectors
-    corr = pivot.corr(method="spearman")
+    corr = pivot.corr(method="spearman").fillna(0)
+
+    # Optionally reorder methods using hierarchical clustering
+    if len(corr) > 1:
+        dist = 1 - corr
+        # condensed distance matrix for linkage
+        condensed = squareform(dist.values, checks=False)
+        order = leaves_list(linkage(condensed, method="average"))
+        corr = corr.iloc[order, order]
 
     # 4) Plot heatmap
     fig = px.imshow(
