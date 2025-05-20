@@ -1,7 +1,9 @@
 pandas
+matplotlib
 numpy
 pyarrow
 pyyaml
+seaborn
 streamlit
 plotly
 kaleido
