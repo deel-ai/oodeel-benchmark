@@ -17,7 +17,7 @@ from src.utils import load_benchmark
 # ──────────────────────────────────────────────────────────────────────
 @st.cache_data
 def load_raw_results():
-    return load_benchmark("reduced_results/*.parquet")
+    return load_benchmark("results/*.parquet")
 
 
 @st.cache_data
@@ -584,7 +584,7 @@ filtered = filter_leaderboard(df, models, methods, packs, search)
 
 # Tabs
 tab1, tab2, tab3 = st.tabs(
-    ["🏆 Leaderboard", "📊 Visualizations", "📚 Paper Experiments [WIP]"]
+    ["🏆 Leaderboard", "📊 Visualizations", "📚 Paper Experiments"]
 )
 
 with tab1:
