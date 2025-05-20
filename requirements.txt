@@ -1,9 +1,7 @@
-torch
-oodeel[torch]
-pyarrow
-rich
 pandas
+numpy
+pyarrow
 pyyaml
-wandb
 streamlit
+plotly
 kaleido

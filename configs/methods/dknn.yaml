@@ -1,9 +1,0 @@
-class: DKNN
-
-init_grid:
-  nearest: [1, 10, 50, 100]
-  use_gpu: [True]
-  aggregator: [FisherAggregator]
-
-fit_grid:
-  layer_packs: [full, partial, penultimate]

@@ -1,8 +1,0 @@
-architecture: cifar100_resnet32
-
-# Canonical layer packs for ALL datasets that use ResNet-18
-layer_packs:
-  full:        [layer1, layer2, layer3, avgpool]
-  penultimate: [fc]
-  partial:     [layer3, avgpool]
-  none:        []
