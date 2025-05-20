@@ -4,6 +4,7 @@ numpy
 pyarrow
 pyyaml
 seaborn
+scipy
 streamlit
 plotly
 kaleido
