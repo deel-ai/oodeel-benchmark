@@ -34,8 +34,18 @@ def load_evals():
 # 1) Build *all* leaderboards once, cache them
 # ──────────────────────────────────────────────────────────────────────
 @st.cache_data
-def build_all_leaderboards(sort_by="near"):
-    raw = load_raw_results()  # now uses the cached raw
+def build_all_leaderboards(sort_by="near", best_only=True):
+    """Build leaderboards for all ID datasets.
+
+    Parameters
+    ----------
+    sort_by: str
+        Column used to rank the runs (default is "near").
+    best_only: bool
+        If True, keep only the run with the best ``sort_by`` score for each
+        (model, method_label, layer_pack) combination. If False, keep all runs.
+    """
+    raw = load_raw_results()  # cached raw results
     tables = {}
     for id_ds in sorted(raw["id_dataset"].unique()):
         df = raw[raw["id_dataset"] == id_ds].copy()
@@ -68,11 +78,37 @@ def build_all_leaderboards(sort_by="near"):
             .reset_index()
         )
         tbl = tbl.sort_values(sort_by, ascending=False)
-        tbl = tbl.drop_duplicates(
-            subset=["model", "method_label", "layer_pack"], keep="first"
-        ).reset_index(drop=True)
+        if best_only:
+            tbl = tbl.drop_duplicates(
+                subset=["model", "method_label", "layer_pack"], keep="first"
+            ).reset_index(drop=True)
 
         tbl = tbl[["method_label", "near", "far", "model", "layer_pack", "uid"]]
+        if not best_only and "init_params" in df.columns:
+            tbl = tbl.merge(
+                df[["uid", "init_params"]].drop_duplicates("uid"),
+                on="uid",
+                how="left",
+            )
+            tbl["init_params"] = tbl["init_params"].apply(
+                lambda x: (
+                    yaml.dump(sanitize(x), sort_keys=False).strip()
+                    if isinstance(x, dict)
+                    else str(x)
+                )
+            )
+            tbl = tbl[
+                [
+                    "method_label",
+                    "near",
+                    "far",
+                    "model",
+                    "layer_pack",
+                    "init_params",
+                    "uid",
+                ]
+            ]
+
         tbl.index.name = "rank"
         tables[id_ds] = tbl
 
@@ -618,7 +654,13 @@ id_ds = st.sidebar.selectbox(
     "ID dataset", ID_OPTIONS, index=ID_OPTIONS.index("imagenet")
 )
 
-tables = build_all_leaderboards()
+mode = st.sidebar.radio(
+    "Leaderboard mode",
+    ["Best per config", "All runs"],
+    index=0,
+)
+
+tables = build_all_leaderboards(best_only=(mode == "Best per config"))
 df = tables[id_ds]
 eval_df = load_evals()
 eval_df = eval_df[eval_df["dataset"] == id_ds]
@@ -642,13 +684,20 @@ tab1, tab2, tab3 = st.tabs(
 
 with tab1:
     # description above the leaderboard
-    st.markdown(
-        "_One row per (ID dataset × model × method × layer_pack)._  "
-        "For each, we tested multiple hyper-parameter configurations and "
-        "**selected the best** according to the _near_-OOD AUROC."
-    )
+    if mode == "Best per config":
+        st.markdown(
+            "_One row per (ID dataset × model × method × layer_pack)._  "
+            "For each, we tested multiple hyper-parameter configurations and "
+            "**selected the best** according to the _near_-OOD AUROC."
+        )
+        st.subheader(f"Top runs — ID: {id_ds.capitalize()}")
+    else:
+        st.markdown(
+            "_One row per run, showing **all** hyper-parameter configurations "
+            "tested for each (ID dataset × model × method × layer_pack)._"
+        )
+        st.subheader(f"All runs — ID: {id_ds.capitalize()}")
     # Leaderboard table
-    st.subheader(f"Top runs — ID: {id_ds.capitalize()}")
     st.write(f"Showing {len(filtered)} / {len(df)} runs")
     styled = filtered.style.background_gradient(
         subset=["near", "far"],
