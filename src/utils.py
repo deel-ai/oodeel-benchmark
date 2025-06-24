@@ -16,7 +16,22 @@ import torch
 
 # from torch.utils.data import DataLoader
 from torchvision import models
+import yaml
 from .openood_networks.utils import get_network
+
+CFG_ROOT = Path(__file__).parent.parent / "configs"
+
+
+def _resolve_attr(obj, path: str):
+    for attr in path.split("."):
+        obj = getattr(obj, attr)
+    return obj
+
+
+def _load_model_cfg(model_name: str):
+    with open(CFG_ROOT / "models" / f"{model_name}.yaml") as f:
+        return yaml.safe_load(f)
+
 
 import pandas as pd
 
@@ -110,137 +125,34 @@ def load_benchmark(
                     .apply(lambda x: pd.Series(x if isinstance(x, dict) else {}))
                     .add_prefix(f"{col}.")
                 )
-
-    # specify react, scale, ash methods
-    # df["method"] = df.apply(
-    #     lambda x: (
-    #         x["method"] + "+react"
-    #         if x["init_params.use_react"] is True
-    #         else x["method"]
-    #     ),
-    #     axis=1,
-    # )
-    # df["method"] = df.apply(
-    #     lambda x: (
-    #         x["method"] + "+scale"
-    #         if x["init_params.use_scale"] is True
-    #         else x["method"]
-    #     ),
-    #     axis=1,
-    # )
-    # df["method"] = df.apply(
-    #     lambda x: (
-    #         x["method"] + "+ash" if x["init_params.use_ash"] is True else x["method"]
-    #     ),
-    #     axis=1,
-    # )
     return df
 
 
 # ------------------------- models -------------------------------------
 def get_model(dataset_name, model_name, device=None, source=None):
-    """Loads a model and moves it to CUDA if available."""
-    # load from torchvision
-    if source == "torchvision":
-        if model_name == "vit_b_16":
-            assert dataset_name == "imagenet", "vit_b_16 only supports imagenet"
-            model = models.vit_b_16(weights=models.ViT_B_16_Weights.IMAGENET1K_V1)
-        elif model_name == "vit_b_16_swag_linear":
-            assert (
-                dataset_name == "imagenet"
-            ), "vit_b_16_swag_linear only supports imagenet"
-            model = models.vit_b_16(
-                weights=models.ViT_B_16_Weights.IMAGENET1K_SWAG_LINEAR_V1
-            )
-        elif model_name == "swin_t":
-            assert dataset_name == "imagenet", "swin_t only supports imagenet"
-            model = models.swin_t(weights=models.Swin_T_Weights.IMAGENET1K_V1)
-        elif model_name == "mobilenet_v2":
-            assert dataset_name == "imagenet", "mobilenet_v2 only supports imagenet"
-            model = models.mobilenet_v2(
-                weights=models.MobileNet_V2_Weights.IMAGENET1K_V1
-            )
-        elif model_name == "mobilenet_v3_large":
-            assert (
-                dataset_name == "imagenet"
-            ), "mobilenet_v3_large only supports imagenet"
-            model = models.mobilenet_v3_large(
-                weights=models.MobileNet_V3_Large_Weights.IMAGENET1K_V1
-            )
-        elif model_name == "regnet_y_16gf":
-            assert dataset_name == "imagenet", "regnet_y_16gf only supports imagenet"
-            model = models.regnet_y_16gf(
-                weights=models.RegNet_Y_16GF_Weights.IMAGENET1K_V1
-            )
-    # load cifar models
-    elif model_name.startswith("cifar"):
-        # load from https://github.com/chenyaofo/pytorch-cifar-models
+    """Load a model according to its configuration."""
+    cfg = _load_model_cfg(model_name)
+    model_source = source or cfg.get("source", "openood")
+
+    if model_source == "torchvision":
+        # torchvision models
+        arch = cfg.get("architecture", model_name)
+        weights_str = cfg.get("weights")
+        weights = _resolve_attr(models, weights_str) if weights_str else None
+        model = getattr(models, arch)(weights=weights)
+    elif model_source == "torchhub":
+        # torch hub models
+        repo = cfg.get("repo", "chenyaofo/pytorch-cifar-models")
         model = torch.hub.load(
-            repo_or_dir="chenyaofo/pytorch-cifar-models",
-            model=model_name,
-            pretrained=True,
-            verbose=False,
+            repo_or_dir=repo, model=model_name, pretrained=True, verbose=False
         ).to(device)
     else:
-        # load from openood_networks
+        # openood models
         model = get_network(
-            dataset_name=dataset_name,
-            model_name=model_name,
-            device=device,
+            dataset_name=dataset_name, model_name=model_name, device=device
         )
 
     model.eval()
     if device is not None:
         model.to(device)
     return model
-
-
-# # ------------------------ datasets ------------------------------------
-# _DATA_ROOT = os.getenv("DATA_ROOT", "./data")
-
-
-# def _default_transform(img_size=224):
-#     return transforms.Compose(
-#         [
-#             transforms.Resize(img_size),
-#             transforms.CenterCrop(img_size),
-#             transforms.ToTensor(),
-#         ]
-#     )
-
-
-# def get_dataset(name: str, split: str):
-#     """
-#     Minimal examples using torchvision datasets.  Extend with your own
-#     datasets as needed. `split` is 'train' or 'test'.
-#     """
-#     root = f"{_DATA_ROOT}/{name}"
-#     if name in ("cifar10", "cifar100"):
-#         cls = datasets.CIFAR10 if name == "cifar10" else datasets.CIFAR100
-#         train = split == "train"
-#         return cls(root, train=train, download=True, transform=_default_transform(32))
-
-#     if name in ("svhn",):
-#         train = split == "train"
-#         return datasets.SVHN(
-#             root,
-#             split="train" if train else "test",
-#             download=True,
-#             transform=_default_transform(32),
-#         )
-
-#     #  Add custom dataset classes here  -------------------------------
-#     raise ValueError(f"Dataset '{name}' not implemented.")
-
-
-# def get_dataloader(
-#     name: str, split: str, batch_size: int = 128, num_workers: int = 4
-# ):
-#     ds = get_dataset(name, split)
-#     return DataLoader(
-#         ds,
-#         batch_size=batch_size,
-#         shuffle=False,
-#         num_workers=num_workers,
-#         pin_memory=True,
-#     )

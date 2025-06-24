@@ -1,8 +1,9 @@
 architecture: cifar10_shufflenetv2_x1_0
+source: torchhub
 
 # Canonical layer packs for ALL datasets that use ResNet-18
 layer_packs:
-  full:        [stage2, stage3, stage4, conv5.2]
+  full: [stage2, stage3, stage4, conv5.2]
   penultimate: [conv5.2]
-  partial:     [stage4, conv5.2]
-  none:        []
+  partial: [stage4, conv5.2]
+  none: []
