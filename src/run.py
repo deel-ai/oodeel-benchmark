@@ -373,12 +373,31 @@ def main():
                         ood_scores = detector.score(ood_loader)[0].tolist()
 
                     # metrics
-                    m = bench_metrics(
-                        (np.array(id_scores), np.array(ood_scores)),
+                    id_scores_val = id_scores[: len(id_scores) // 2]
+                    id_scores_test = id_scores[len(id_scores) // 2 :]
+                    ood_scores_val = ood_scores[: len(ood_scores) // 2]
+                    ood_scores_test = ood_scores[len(ood_scores) // 2 :]
+
+                    m_val = bench_metrics(
+                        (np.array(id_scores_val), np.array(ood_scores_val)),
                         metrics=["auroc", "tpr5fpr"],
                     )
-                    auroc, tpr5 = m["auroc"], m["tpr5fpr"]
-                    run_metrics.append({"group": grp, "auroc": auroc, "tpr5": tpr5})
+                    auroc_val, tpr5_val = m_val["auroc"], m_val["tpr5fpr"]
+
+                    m_test = bench_metrics(
+                        (np.array(id_scores_test), np.array(ood_scores_test)),
+                        metrics=["auroc", "tpr5fpr"],
+                    )
+                    auroc, tpr5 = m_test["auroc"], m_test["tpr5fpr"]
+                    run_metrics.append(
+                        {
+                            "group": grp,
+                            "auroc_val": auroc_val,
+                            "tpr5_val": tpr5_val,
+                            "auroc": auroc,
+                            "tpr5fpr": tpr5,
+                        }
+                    )
 
                     # parquet row
                     if not run["init"]:
@@ -396,6 +415,8 @@ def main():
                             fit_params=run["fit"],
                             id_scores=id_scores,
                             ood_scores=ood_scores,
+                            auroc_val=auroc_val,
+                            tpr5_val=tpr5_val,
                             auroc=auroc,
                             tpr5fpr=tpr5,
                         )

@@ -1,8 +1,9 @@
 architecture: cifar10_repvgg_a2
+source: torchhub
 
 # Canonical layer packs for ALL datasets that use ResNet-18
 layer_packs:
-  full:        [stage0, stage1, stage2, stage3, stage4, gap]
+  full: [stage0, stage1, stage2, stage3, stage4, gap]
   penultimate: [gap]
-  partial:     [stage3, stage4, gap]
-  none:        []
+  partial: [stage3, stage4, gap]
+  none: []

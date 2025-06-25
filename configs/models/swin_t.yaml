@@ -1,5 +1,6 @@
 architecture: swin_t
 source: torchvision
+weights: Swin_T_Weights.IMAGENET1K_V1
 
 # Canonical layer packs for ALL datasets that use vit_b16
 layer_packs:

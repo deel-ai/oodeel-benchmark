@@ -1,5 +1,6 @@
 architecture: regnet_y_16gf
 source: torchvision
+weights: RegNet_Y_16GF_Weights.IMAGENET1K_V1
 
 # Canonical layer packs for ALL datasets that use Mobilenet-v3-large
 layer_packs:

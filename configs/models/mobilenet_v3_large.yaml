@@ -1,5 +1,6 @@
 architecture: mobilenet_v3_large
 source: torchvision
+weights: MobileNet_V3_Large_Weights.IMAGENET1K_V1
 
 # Canonical layer packs for ALL datasets that use Mobilenet-v3-large
 layer_packs:

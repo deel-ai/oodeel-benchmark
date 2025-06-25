@@ -1,5 +1,6 @@
 architecture: mobilenet_v2
 source: torchvision
+weights: MobileNet_V2_Weights.IMAGENET1K_V1
 
 # Canonical layer packs for ALL datasets that use Mobilenet-v2
 layer_packs:

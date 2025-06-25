@@ -1,8 +1,9 @@
 architecture: resnet18_224
+source: openood
 
 # Canonical layer packs for ALL datasets that use ResNet-18 224x224
 layer_packs:
-  full:        [maxpool, layer1, layer2, layer3, layer4, avgpool]
+  full: [maxpool, layer1, layer2, layer3, layer4, avgpool]
   penultimate: [avgpool]
-  partial:     [layer3, layer4, avgpool]
-  none:        []
+  partial: [layer3, layer4, avgpool]
+  none: []
