@@ -1,8 +1,9 @@
 architecture: cifar10_resnet20
+source: torchhub
 
 # Canonical layer packs for ALL datasets that use ResNet-18
 layer_packs:
-  full:        [layer1, layer2, layer3, avgpool]
+  full: [layer1, layer2, layer3, avgpool]
   penultimate: [fc]
-  partial:     [layer3, avgpool]
-  none:        []
+  partial: [layer3, avgpool]
+  none: []

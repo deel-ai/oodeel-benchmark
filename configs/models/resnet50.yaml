@@ -1,8 +1,9 @@
 architecture: resnet50
+source: openood
 
 # Canonical layer packs for ALL datasets that use ResNet-50
 layer_packs:
-  full:        [layer1, layer2, layer3, layer4, avgpool]
+  full: [layer1, layer2, layer3, layer4, avgpool]
   penultimate: [avgpool]
-  partial:     [layer3, layer4, avgpool]
-  none:        []
+  partial: [layer3, layer4, avgpool]
+  none: []

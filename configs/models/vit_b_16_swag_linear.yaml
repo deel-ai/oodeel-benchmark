@@ -1,5 +1,6 @@
-architecture: vit_b_16_swag_linear
+architecture: vit_b_16
 source: torchvision
+weights: ViT_B_16_Weights.IMAGENET1K_SWAG_LINEAR_V1
 
 # Canonical layer packs for ALL datasets that use vit_b16
 layer_packs:

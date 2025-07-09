@@ -1,8 +1,20 @@
 architecture: cifar10_vgg11_bn
+source: torchhub
 
 # Canonical layer packs for ALL datasets that use ResNet-18
 layer_packs:
-  full:        [features.2, features.6, features.10, features.13, features.17, features.20, features.24, features.27, classifier.5]
+  full:
+    [
+      features.2,
+      features.6,
+      features.10,
+      features.13,
+      features.17,
+      features.20,
+      features.24,
+      features.27,
+      classifier.5,
+    ]
   penultimate: [classifier.5]
-  partial:     [features.20, features.24, features.27, classifier.5]
-  none:        []
+  partial: [features.20, features.24, features.27, classifier.5]
+  none: []
