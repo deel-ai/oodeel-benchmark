@@ -487,6 +487,7 @@ def plot_id_accuracy_vs_ood(df, eval_df, id_ds, ood_group="near"):
 def plot_method_rank_stats_grouped(df, id_ds):
     # compute mean & std of ranks for both near and far
     stats = {}
+    ranks_data = []
     for grp in ["near", "far"]:
         best = df.sort_values(grp, ascending=False).drop_duplicates(
             subset=["model", "method_label"], keep="first"
@@ -499,60 +500,47 @@ def plot_method_rank_stats_grouped(df, id_ds):
         best_base = best[is_base | is_energy_variant].copy()
         pivot = best_base.pivot(index="model", columns="method_label", values=grp)
         ranks = pivot.rank(axis=1, method="average", ascending=False)
-        stats[grp] = {
-            "mean": ranks.mean(axis=0),
-            "std": ranks.std(axis=0),
-        }
 
-    # sort methods by mean near‐rank ascending (best on left)
-    mean_near = stats["near"]["mean"].sort_values()
-    methods = mean_near.index.tolist()
-    near_mean = mean_near.values
-    near_std = stats["near"]["std"][methods].values
-    far_mean = stats["far"]["mean"][methods].values
-    far_std = stats["far"]["std"][methods].values
+        # Collect ranks for melting
+        for method_label in ranks.columns:
+            for rank in ranks[method_label].dropna():
+                ranks_data.append(
+                    {"method_label": method_label, "rank": rank, "OOD-type": grp}
+                )
 
-    # Colors: Set2 palette (colorblind friendly)
-    colors = qualitative.Set2
-    near_color = colors[0]  # e.g. '#66c2a5'
-    far_color = colors[1]  # e.g. '#fc8d62'
+    # Create DataFrame for plotting
+    ranks_df = pd.DataFrame(ranks_data)
 
-    fig = go.Figure()
-    fig.add_trace(
-        go.Bar(
-            x=methods,
-            y=near_mean,
-            name="Near mean rank",
-            error_y=dict(type="data", array=near_std, thickness=1.5, width=2),
-            marker=dict(color=near_color),
-            width=0.35,
-        )
+    # Sort method_label by ascending mean rank for near
+    median_ranks = (
+        ranks_df[ranks_df["OOD-type"] == "near"]
+        .groupby("method_label")["rank"]
+        .median()
+        .sort_values()
     )
-    fig.add_trace(
-        go.Bar(
-            x=methods,
-            y=far_mean,
-            name="Far mean rank",
-            error_y=dict(type="data", array=far_std, thickness=1.5, width=2),
-            marker=dict(color=far_color),
-            width=0.35,
-        )
+    sorted_methods = median_ranks.index.tolist()
+
+    # Update ranks_df to ensure method_label follows sorted_methods order
+    ranks_df["method_label"] = pd.Categorical(
+        ranks_df["method_label"], categories=sorted_methods, ordered=True
     )
 
-    fig.update_layout(
+    # Plot box plot
+    fig = px.box(
+        ranks_df,
+        x="method_label",
+        y="rank",
+        color="OOD-type",
+        category_orders={"method_label": sorted_methods},
+        color_discrete_sequence=px.colors.qualitative.Plotly,
+        labels={
+            "rank": "Rank (↓ best)",
+            "method_label": "Detector (sorted by near median ↑)",
+            "OOD-type": "OOD Type",
+        },
         title=f"Method Rank Variability — {id_ds}",
-        barmode="group",
-        bargap=0.2,
-        bargroupgap=0.1,
-        xaxis=dict(
-            title="Method (sorted by near mean ↑)", tickangle=-45, automargin=True
-        ),
-        yaxis=dict(title="Mean rank (↓ best)"),
-        # move legend above the plot, centered
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
-        margin=dict(l=50, r=50, t=80, b=150),  # extra top margin for legend
-        # height=400 + 30 * len(methods),
     )
+    fig.update_layout(showlegend=True, height=400, xaxis_tickangle=-45)
 
     return fig
 
