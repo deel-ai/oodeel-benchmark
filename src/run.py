@@ -373,17 +373,28 @@ def main():
                         ood_scores = detector.score(ood_loader)[0].tolist()
 
                     # metrics
-                    id_scores_val = id_scores[: len(id_scores) // 2]
-                    id_scores_test = id_scores[len(id_scores) // 2 :]
-                    ood_scores_val = ood_scores[: len(ood_scores) // 2]
-                    ood_scores_test = ood_scores[len(ood_scores) // 2 :]
+                    split_val_test = False  # HARDCODED, TODO: make it configurable
 
-                    m_val = bench_metrics(
-                        (np.array(id_scores_val), np.array(ood_scores_val)),
-                        metrics=["auroc", "tpr5fpr"],
-                    )
-                    auroc_val, tpr5_val = m_val["auroc"], m_val["tpr5fpr"]
+                    if split_val_test:
+                        # split the scores into val and test
+                        id_scores_val = id_scores[: len(id_scores) // 2]
+                        id_scores_test = id_scores[len(id_scores) // 2 :]
+                        ood_scores_val = ood_scores[: len(ood_scores) // 2]
+                        ood_scores_test = ood_scores[len(ood_scores) // 2 :]
 
+                        # compute metrics for val
+                        m_val = bench_metrics(
+                            (np.array(id_scores_val), np.array(ood_scores_val)),
+                            metrics=["auroc", "tpr5fpr"],
+                        )
+                        auroc_val, tpr5_val = m_val["auroc"], m_val["tpr5fpr"]
+                    else:
+                        # no split, use the whole scores
+                        id_scores_test = id_scores
+                        ood_scores_test = ood_scores
+                        auroc_val, tpr5_val = None, None
+
+                    # compute metrics for test
                     m_test = bench_metrics(
                         (np.array(id_scores_test), np.array(ood_scores_test)),
                         metrics=["auroc", "tpr5fpr"],
