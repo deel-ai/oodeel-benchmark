@@ -50,6 +50,15 @@ CUDA_VISIBLE_DEVICES=1 python -m src/run.py --shard-index 1 --num-shards 2 &
 
 Each process grabs its slice of the sweep; they meet only in the shared `results/` folder. Restarting is instant—completed files are skipped.
 
+## Profiling detectors
+
+```bash
+python -m src.profile_efficiency
+```
+
+A Parquet table is written to `profile_results/imagenet_resnet50.parquet`.
+
+
 ---
 
 ## Customising the sweep
