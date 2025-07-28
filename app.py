@@ -19,22 +19,28 @@ from src.utils import load_benchmark
 # ──────────────────────────────────────────────────────────────────────
 @st.cache_data
 def load_raw_results():
-    return load_benchmark("reduced_results/*.parquet")
+    return load_benchmark("rebuttal/reduced_results/*.parquet")
+    # return load_benchmark("rebuttal/results_rebuttal_yp_v2/*.parquet")
 
 
 @st.cache_data
 def load_evals():
-    # Load ID‐accuracy parquets (preserves id_dataset and model)
+    # Load ID-accuracy parquets (preserves id_dataset and model)
     acc_files = glob.glob("evaluate_models/*.parquet")
     df_acc = pd.concat([pd.read_parquet(f) for f in acc_files], ignore_index=True)
     return df_acc
+
+
+# ──────────────────────────────────────────────────────────────
+st.set_page_config(layout="centered")
+st.title("OODeel Benchmark Dashboard")
 
 
 # ──────────────────────────────────────────────────────────────────────
 # 1) Build *all* leaderboards once, cache them
 # ──────────────────────────────────────────────────────────────────────
 @st.cache_data
-def build_all_leaderboards(sort_by="near", best_only=True):
+def build_all_leaderboards(metric="auroc", sort_by="near", best_only=True):
     """Build leaderboards for all ID datasets.
 
     Parameters
@@ -66,18 +72,20 @@ def build_all_leaderboards(sort_by="near", best_only=True):
 
         tbl = (
             df.groupby(["uid", "model", "method_label", "layer_pack", "ood_group"])[
-                "auroc"
+                metric_col
             ]
             .mean()
             .reset_index()
             .pivot_table(
                 index=["uid", "model", "method_label", "layer_pack"],
                 columns="ood_group",
-                values="auroc",
+                values=metric_col,
             )
             .reset_index()
         )
-        tbl = tbl.sort_values(sort_by, ascending=False)
+        # for FPR@95%TPR lower is better
+        asc = metric_col == "fpr95tpr"
+        tbl = tbl.sort_values(sort_by, ascending=asc)
         if best_only:
             tbl = tbl.drop_duplicates(
                 subset=["model", "method_label", "layer_pack"], keep="first"
@@ -159,19 +167,41 @@ def plot_scatter_pareto(df, id_ds):
         color="method_label",
         symbol="model",
         hover_data=["uid", "layer_pack"],
-        labels={"near": "Near AUROC", "far": "Far AUROC"},
-        title=f"Near vs Far AUROC — {id_ds}",
+        labels={"near": f"Near {metric}", "far": f"Far {metric}"},
+        title=f"Near vs Far {metric} — {id_ds}",
         color_discrete_sequence=px.colors.qualitative.Plotly,
     )
+    lower_better = metric_col == "fpr95tpr"
+
     # compute Pareto front
-    pts = df[["near", "far"]].drop_duplicates().sort_values("near", ascending=False)
-    max_far = -np.inf
+    pts = df[["near", "far"]].drop_duplicates()
+    pts.sort_values("near", ascending=lower_better)
+
     pareto = []
-    for _, r in pts.iterrows():
-        if r.far > max_far:
-            pareto.append((r.near, r.far))
-            max_far = r.far
-    pareto = pd.DataFrame(pareto, columns=["near", "far"])[::-1]
+    if lower_better:
+        best_far = math.inf
+        # keep the runs that push far down
+        for _, r in pts.iterrows():
+            if r.far < best_far:
+                pareto.append((r.near, r.far))
+                best_far = r.far
+    else:
+        best_far = -math.inf
+        # keep the runs that push far up
+        for _, r in pts.iterrows():
+            if r.far > best_far:
+                pareto.append((r.near, r.far))
+                best_far = r.far
+
+    pareto = pd.DataFrame(pareto, columns=["near", "far"])
+
+    # max_far = -np.inf
+    # pareto = []
+    # for _, r in pts.iterrows():
+    #     if r.far > max_far:
+    #         pareto.append((r.near, r.far))
+    #         max_far = r.far
+    # pareto = pd.DataFrame(pareto, columns=["near", "far"])[::-1]
     fig.add_trace(
         go.Scatter(
             x=pareto.near,
@@ -186,28 +216,30 @@ def plot_scatter_pareto(df, id_ds):
 
 
 def plot_box(df):
-    best = df.sort_values("near", ascending=False).drop_duplicates(
+    asc = metric_col == "fpr95tpr"
+    best = df.sort_values("near", ascending=asc).drop_duplicates(
         subset=["model", "method_label"], keep="first"
     )
     melt = best.melt(
         id_vars=["method_label"],
         value_vars=["near", "far"],
         var_name="OOD-type",
-        value_name="AUROC",
+        value_name=metric,
     )
     return px.box(
         melt,
         x="method_label",
-        y="AUROC",
+        y=metric,
         color="OOD-type",
         color_discrete_sequence=px.colors.qualitative.Plotly,
-        title="Distribution of Near vs Far AUROC by Method",
+        title=f"Distribution of Near vs Far {metric} by Method",
     )
 
 
 def plot_heatmap_plotly(df, id_ds):
     # build pivoted avg table
-    best = df.sort_values("near", ascending=False).drop_duplicates(
+    asc = metric_col == "fpr95tpr"
+    best = df.sort_values("near", ascending=asc).drop_duplicates(
         subset=["model", "method_label"], keep="first"
     )
 
@@ -221,12 +253,12 @@ def plot_heatmap_plotly(df, id_ds):
     fig = px.imshow(
         heat,
         text_auto=".3f",
-        labels={"x": "Model", "y": "Method", "color": "Avg AUROC"},
+        labels={"x": "Model", "y": "Method", "color": f"Avg {metric}"},
         aspect="auto",
         color_continuous_scale="Magma",
     )
     fig.update_layout(
-        title=f"Avg AUROC per Method x Model — {id_ds}",
+        title=f"Avg {metric} per Method x Model — {id_ds}",
         xaxis_tickangle=-45,
         margin=dict(l=150, t=50, b=50),  # make room on the left
         height=max(600, 24 * heat.shape[0]),  # grow height per method
@@ -245,7 +277,7 @@ def plot_small_multiples(df):
         facet_col_wrap=3,
         color="method_label",
         height=300 * num_rows,
-        title="Near vs Far AUROC by Model (small multiples)",
+        title=f"Near vs Far {metric} by Model (small multiples)",
         color_discrete_sequence=px.colors.qualitative.Plotly,
     )
     # cleanup facet titles
@@ -255,8 +287,9 @@ def plot_small_multiples(df):
 
 
 def plot_model_corr_heatmap(df, id_ds):
-    # 1) For each (model, method_label), pick the run with max near AUROC
-    best = df.sort_values("near", ascending=False).drop_duplicates(
+    # 1) For each (model, method_label), pick the run with max near metric
+    asc = metric_col == "fpr95tpr"
+    best = df.sort_values("near", ascending=asc).drop_duplicates(
         subset=["model", "method_label"], keep="first"
     )
 
@@ -300,7 +333,8 @@ def plot_model_corr_heatmap(df, id_ds):
 def plot_method_corr_heatmap(df, id_ds):
     """Method vs Method rank-correlation heatmap."""
     # 1) For each (model, method_label), keep run with highest near AUROC
-    best = df.sort_values("near", ascending=False).drop_duplicates(
+    asc = metric_col == "fpr95tpr"
+    best = df.sort_values("near", ascending=asc).drop_duplicates(
         subset=["model", "method_label"], keep="first"
     )
 
@@ -351,8 +385,10 @@ def plot_activation_shaping_boxplots(df, id_ds, ood_group="near"):
     shaped_methods = sorted(df2[df2["hyper_mode"] != "none"]["base_method"].unique())
     df2 = df2[df2["base_method"].isin(shaped_methods)]
 
-    # 3) Pick best near‐AUROC per (base_method, hyper_mode, model)
-    best = df2.sort_values("near", ascending=False).drop_duplicates(
+    # 3) Pick best near-AUROC per (base_method, hyper_mode, model)
+    # for FPR@95%TPR lower is better
+    asc = metric_col == "fpr95tpr"
+    best = df2.sort_values("near", ascending=asc).drop_duplicates(
         subset=["base_method", "hyper_mode", "model"], keep="first"
     )
 
@@ -381,8 +417,8 @@ def plot_activation_shaping_boxplots(df, id_ds, ood_group="near"):
         facet_col="base_method",
         # facet_col_wrap=per_row,
         category_orders={"hyper_mode": modes},
-        labels={"delta": f"Δ {ood_group.capitalize()} AUROC", "hyper_mode": "Mode"},
-        title=f"Activation-Shaping Impact (Δ {ood_group.capitalize()} AUROC) — {id_ds}",
+        labels={"delta": f"Δ {ood_group.capitalize()} {metric}", "hyper_mode": "Mode"},
+        title=f"Activation-Shaping Impact (Δ {ood_group.capitalize()} {metric}) — {id_ds}",
         color_discrete_sequence=px.colors.qualitative.Plotly,
     )
     fig.update_layout(showlegend=True, height=300)
@@ -406,8 +442,10 @@ def plot_layerpack_boxplots(df, id_ds, ood_group="near"):
     packs = ["penultimate", "partial", "full"]
     df2 = df[df["layer_pack"].isin(packs)].copy()
 
-    # 2) For each (method_label, layer_pack, model), pick best near‐AUROC
-    best = df2.sort_values("near", ascending=False).drop_duplicates(
+    # 2) For each (method_label, layer_pack, model), pick best near-AUROC
+    # for FPR@95%TPR lower is better
+    asc = metric_col == "fpr95tpr"
+    best = df2.sort_values("near", ascending=asc).drop_duplicates(
         subset=["method_label", "layer_pack", "model"], keep="first"
     )
 
@@ -436,10 +474,10 @@ def plot_layerpack_boxplots(df, id_ds, ood_group="near"):
         facet_col="method_label",
         category_orders={"layer_pack": packs_cats},
         labels={
-            "delta": f"Δ {ood_group.capitalize()} AUROC",
+            "delta": f"Δ {ood_group.capitalize()} {metric}",
             "layer_pack": "Layers",
         },
-        title=f"Layer-Pack Impact (Δ {ood_group.capitalize()} AUROC) — {id_ds}",
+        title=f"Layer-Pack Impact (Δ {ood_group.capitalize()} {metric}) — {id_ds}",
         color_discrete_sequence=px.colors.qualitative.Plotly,
     )
     fig.update_layout(showlegend=True, height=300)
@@ -473,7 +511,7 @@ def plot_id_accuracy_vs_ood(df, eval_df, id_ds, ood_group="near"):
         text="model",
         labels={
             "accuracy": "ID Accuracy",
-            ood_group: f"Max {ood_group.capitalize()} OOD AUROC",
+            ood_group: f"Max {ood_group.capitalize()} OOD {metric}",
         },
         title=f"ID vs OOD Performance ({ood_group.capitalize()}):"
         f" Spearman ρ = {rho:.2f} — {id_ds} ",
@@ -489,7 +527,8 @@ def plot_method_rank_stats_grouped(df, id_ds):
     stats = {}
     ranks_data = []
     for grp in ["near", "far"]:
-        best = df.sort_values(grp, ascending=False).drop_duplicates(
+        asc = metric_col == "fpr95tpr"
+        best = df.sort_values(grp, ascending=asc).drop_duplicates(
             subset=["model", "method_label"], keep="first"
         )
         # keep base methods AND energy variants with one shaping mode
@@ -499,7 +538,7 @@ def plot_method_rank_stats_grouped(df, id_ds):
         )
         best_base = best[is_base | is_energy_variant].copy()
         pivot = best_base.pivot(index="model", columns="method_label", values=grp)
-        ranks = pivot.rank(axis=1, method="average", ascending=False)
+        ranks = pivot.rank(axis=1, method="average", ascending=asc)
 
         # Collect ranks for melting
         for method_label in ranks.columns:
@@ -632,23 +671,32 @@ def chart_with_download(fig, key, default_width=700, default_height=400):
 # ──────────────────────────────────────────────────────────────────────
 # Streamlit layout
 # ──────────────────────────────────────────────────────────────────────
-st.set_page_config(layout="centered")
-st.title("OODeel Benchmark Dashboard")
 
-# Sidebar
 raw = load_raw_results()  # **fast** after first call
+
+# ID dataset selector
 ID_OPTIONS = sorted(raw["id_dataset"].unique())
 id_ds = st.sidebar.selectbox(
     "ID dataset", ID_OPTIONS, index=ID_OPTIONS.index("imagenet")
 )
 
+# Metric selector (higher‑is‑better except FPR@95%TPR)
+METRICS = {
+    "AUROC": "auroc",
+    "TPR@5%FPR": "tpr5fpr",
+    "FPR@95%TPR": "fpr95tpr",
+    "AP": "ap_score",
+}
+metric = st.sidebar.selectbox("Metric", list(METRICS.keys()), index=0)
+metric_col = METRICS[metric]
+
+# Leaderboard mode selector
 mode = st.sidebar.radio(
     "Leaderboard mode",
     ["Best per config", "All runs"],
     index=0,
 )
-
-tables = build_all_leaderboards(best_only=(mode == "Best per config"))
+tables = build_all_leaderboards(metric=metric, best_only=(mode == "Best per config"))
 df = tables[id_ds]
 eval_df = load_evals()
 eval_df = eval_df[eval_df["dataset"] == id_ds]
@@ -676,7 +724,7 @@ with tab1:
         st.markdown(
             "_One row per (ID dataset × model × method × layer_pack)._  "
             "For each, we tested multiple hyper-parameter configurations and "
-            "**selected the best** according to the _near_-OOD AUROC."
+            f"**selected the best** according to the _near_-OOD {metric}."
         )
         st.subheader(f"Top runs — ID: {id_ds.capitalize()}")
     else:
@@ -687,9 +735,10 @@ with tab1:
         st.subheader(f"All runs — ID: {id_ds.capitalize()}")
     # Leaderboard table
     st.write(f"Showing {len(filtered)} / {len(df)} runs")
+    cmap = "YlOrRd" if metric_col == "fpr95tpr" else "YlOrRd_r"
     styled = filtered.style.background_gradient(
         subset=["near", "far"],
-        cmap="YlOrRd_r",
+        cmap=cmap,
     )
     styled.format(
         {
@@ -699,7 +748,7 @@ with tab1:
     )
     st.dataframe(styled, height=800, use_container_width=True)
 
-    # Run‐config viewer
+    # Run-config viewer
     st.markdown("**Run Configuration**")
     sel = st.selectbox("Select UID", filtered["uid"])
     run_row = raw[raw["uid"] == sel].iloc[0]
@@ -716,10 +765,10 @@ with tab2:
     # explanation of what the visualizations show
     st.markdown(
         "_Interactive visualizations of the selected runs:_  \n"
-        "- **Scatter & Pareto:** each point is a run (near vs far AUROC), with the "
+        f"- **Scatter & Pareto:** each point is a run (near vs far {metric}), with the "
         "Pareto front highlighted.  \n"
-        "- **Boxplot:** distribution of near/far AUROC across methods.  \n"
-        "- **Heatmap:** average AUROC (near+far) per method × model.  \n"
+        f"- **Boxplot:** distribution of near/far {metric} across methods.  \n"
+        f"- **Heatmap:** average {metric} (near+far) per method × model.  \n"
         "- **Small multiples:** per-model scatter facets."
     )
     st.markdown(r"#### Scatter with Pareto front")
@@ -730,7 +779,9 @@ with tab2:
         default_height=400,
     )
 
-    st.markdown(r"#### Near vs Far AUROC Boxplot")
+    st.markdown(
+        r"#### Near vs Far {} Boxplot".format(metric)
+    )  # note: will metric be replaced with r"{metric}"?
     chart_with_download(
         plot_box(filtered),
         key=f"{id_ds}_boxplot_near_far",
@@ -738,10 +789,10 @@ with tab2:
         default_height=400,
     )
 
-    st.markdown(r"#### Method x Model Avg AUROC Heatmap")
+    st.markdown(r"#### Method x Model Avg {} Heatmap".format(metric))
     chart_with_download(
         plot_heatmap_plotly(filtered, id_ds),
-        key=f"{id_ds}_heatmap_avg_auroc",
+        key=f"{id_ds}_heatmap_avg_{metric_col}",
         default_width=700,
         default_height=700,
     )
@@ -756,24 +807,26 @@ with tab2:
 
 
 with tab3:
+    metric_tex = metric.replace("%", r"\%")
+    max_eq = "max" if metric_col != "fpr95tpr" else "min"
     # exp 1: model vs model rank-correlation
     st.markdown(r"#### Exp 1: Model vs Model Rank-Correlation Heatmap")
-    st.markdown(
-        r"""
-        For each ID dataset, define for each model $i$ the vector of best Near-OOD
-         AUROCs over all methods:
-        $$
-        \mathbf{v}_i = \bigl[\,v_{i1},\,v_{i2},\,\dots,\,v_{iK}\bigr], 
-        \quad v_{ik} = \max_{\text{layer\_pack}}\mathrm{AUROC}_{\text{near}}\bigl(\text{model}_i,
-        \text{method}_k\bigr)
-        $$
-        Then compute Spearman’s rank‐correlation
-        $$
-        \rho_{ij} = \mathrm{SpearmanCorr}\bigl(\mathbf{v}_i,\mathbf{v}_j\bigr)
-        $$
-        and display the matrix $\{\rho_{ij}\}$ in a **Model Correlation Heatmap**.
-        """
-    )
+    exp1_str = r"""
+    For each ID dataset, define for each model $i$ the vector of best Near-OOD
+        AUROCs over all methods:
+    $$
+    \mathbf{v}_i = \bigl[\,v_{i1},\,v_{i2},\,\dots,\,v_{iK}\bigr],
+    \quad v_{ik} = \max_{\text{layer\_pack}}\mathrm{AUROC}_{\text{near}}\bigl(\text{model}_i,
+    \text{method}_k\bigr)
+    $$
+    Then compute Spearman's rank-correlation
+    $$
+    \rho_{ij} = \mathrm{SpearmanCorr}\bigl(\mathbf{v}_i,\mathbf{v}_j\bigr)
+    $$
+    and display the matrix $\{\rho_{ij}\}$ in a **Model Correlation Heatmap**.
+    """
+    exp1_str = exp1_str.replace("AUROC", metric_tex).replace("max", max_eq)
+    st.markdown(exp1_str)
 
     chart_with_download(
         plot_model_corr_heatmap(filtered, id_ds),
@@ -792,12 +845,16 @@ with tab3:
         \mathbf{v}_k = \bigl[\,v_{1k},\,v_{2k},\,\dots\bigr], \quad
         v_{ik} = \max_{\text{layer\_pack}}\mathrm{AUROC}_{\text{near}}\bigl(\text{model}_i, \text{method}_k\bigr).
         $$
-        Compute Spearman’s rank-correlation
+        Compute Spearman's rank-correlation
         $$
         \rho_{k\ell} = \mathrm{SpearmanCorr}\bigl(\mathbf{v}_k,\mathbf{v}_\ell\bigr)
         $$
         and visualize the matrix $\{\rho_{k\ell}\}$ in a **Method Correlation Heatmap**.
-        """
+        """.replace(
+            "AUROC", metric_tex
+        ).replace(
+            "max", max_eq
+        )
     )
 
     chart_with_download(
@@ -818,9 +875,13 @@ with tab3:
     $$
     Convert each score vector $\{v_{i,k}\}_k$ into ranks $r_{i,k}$ (1 = best).
     We then plot, for each method $k$, the mean rank $\mathbb{E}_i[r_{i,k}]$ with
-        error bars showing the rank’s standard deviation across models, separately
+        error bars showing the rank's standard deviation across models, separately
         for Near and Far.
-    """
+    """.replace(
+            "AUROC", metric_tex
+        ).replace(
+            "max", max_eq
+        )
     )
     chart_with_download(
         plot_method_rank_stats_grouped(filtered, id_ds),
@@ -831,7 +892,11 @@ with tab3:
 
     # exp 3: activation shaping effect
     st.markdown("---")
-    st.markdown("#### Exp 3: Activation‐Shaping Impact (Δ Near & Far AUROC)")
+    st.markdown(
+        r"#### Exp 3: Activation-Shaping Impact (Δ Near & Far AUROC)".replace(
+            "AUROC", metric_tex
+        )
+    )
     st.markdown(
         r"""
     For each logit-based method $k$ and each shaping mode 
@@ -846,8 +911,10 @@ with tab3:
     $$
 
     We then draw boxplots of the distributions $\{\Delta v_{i,k,m}\}_i$ 
-    across models, comparing each mode against the no‐shaping baseline.
-    """
+    across models, comparing each mode against the no-shaping baseline.
+    """.replace(
+            "AUROC", metric_tex
+        )
     )
 
     chart_with_download(
@@ -865,14 +932,18 @@ with tab3:
 
     # exp 4: layer-pack impact
     st.markdown("---")
-    st.markdown("#### Exp 4: Layer-Pack Impact (Δ Near & Far AUROC)")
+    st.markdown(
+        r"#### Exp 4: Layer-Pack Impact (Δ Near & Far AUROC)".replace(
+            "AUROC", metric_tex
+        )
+    )
 
     st.markdown(
         r"""
-    For each feature-based method $k$ and each layer‐pack mode 
+    For each feature-based method $k$ and each layer-pack mode 
     $p \in \{\mathrm{penultimate}, \mathrm{partial}, \mathrm{full}\}$, we define:
 
-    - **penultimate**: OOD scores computed **only** on the penultimate layer’s features.
+    - **penultimate**: OOD scores computed **only** on the penultimate layer's features.
     - **partial**: OOD scores computed on a **subset** of late feature layers, then 
                 **aggregated** via a combination of p-values using Fisher test.
     - **full**: OOD scores computed on **all major block outputs**, then aggregated by
@@ -889,7 +960,9 @@ with tab3:
 
     We then draw boxplots of the distributions $\{\Delta v_{i,k,p}\}_i$ across models,
                 comparing **partial** and **full** against the penultimate baseline.
-    """
+    """.replace(
+            "AUROC", metric_tex
+        )
     )
     chart_with_download(
         plot_layerpack_boxplots(filtered, id_ds, "near"),
@@ -906,7 +979,11 @@ with tab3:
 
     st.markdown("---")
     # Exp 5: In-Distribution Accuracy vs. Max OOD AUROC
-    st.markdown("#### Exp 5: In-Distribution Accuracy vs. Max OOD AUROC")
+    st.markdown(
+        r"#### Exp 5: In-Distribution Accuracy vs. Max OOD AUROC".replace(
+            "AUROC", metric_tex
+        )
+    )
     st.markdown(
         r"""
     Define for each model $i$:
@@ -914,10 +991,12 @@ with tab3:
     v_i = \max_{k}\,\mathrm{AUROC}(\text{model}_i, \text{method}_k),\quad 
     \mathrm{Acc}_i = \text{ID Accuracy}(\text{model}_i).
     $$
-    We then plot $ v_i $ against $ \mathrm{Acc}_i $, and report Spearman’s correlation
+    We then plot $ v_i $ against $ \mathrm{Acc}_i $, and report Spearman's correlation
                 $\rho$ to examine the relationship between in-distribution accuracy and
                 OOD robustness.
-    """
+    """.replace(
+            "AUROC", metric_tex
+        )
     )
     chart_with_download(
         plot_id_accuracy_vs_ood(filtered, eval_df, id_ds, "near"),
