@@ -22,3 +22,9 @@ imagenet:
     kwargs:
       num_classes: 1000
     ckpt_path: models/pretrained_weights/resnet50_imagenet1k_v1.pth
+imagenet_fs:
+  resnet50:
+    class: ResNet50
+    kwargs:
+      num_classes: 1000
+    ckpt_path: models/pretrained_weights/resnet50_imagenet1k_v1.pth

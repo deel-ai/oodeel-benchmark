@@ -25,6 +25,7 @@ from rich.progress import (
     TimeRemainingColumn,
     SpinnerColumn,
 )
+from sklearn.metrics import average_precision_score
 
 import oodeel.methods as oodeel_methods
 import oodeel.aggregator as oodeel_aggregator
@@ -385,28 +386,58 @@ def main():
                         # compute metrics for val
                         m_val = bench_metrics(
                             (np.array(id_scores_val), np.array(ood_scores_val)),
-                            metrics=["auroc", "tpr5fpr"],
+                            metrics=["auroc", "tpr5fpr", "fpr95tpr"],
                         )
-                        auroc_val, tpr5_val = m_val["auroc"], m_val["tpr5fpr"]
+                        auroc_val, tpr5_val, fpr95_val = (
+                            m_val["auroc"],
+                            m_val["tpr5fpr"].item(),
+                            m_val["fpr95tpr"].item(),
+                        )
+                        ap_val = average_precision_score(
+                            np.concatenate(
+                                [
+                                    np.zeros(len(id_scores_val)),
+                                    np.ones(len(ood_scores_val)),
+                                ]
+                            ),
+                            np.concatenate([id_scores_val, ood_scores_val]),
+                        ).item()
                     else:
                         # no split, use the whole scores
                         id_scores_test = id_scores
                         ood_scores_test = ood_scores
-                        auroc_val, tpr5_val = None, None
+                        auroc_val, tpr5_val, fpr95_val, ap_val = None, None, None, None
 
                     # compute metrics for test
                     m_test = bench_metrics(
                         (np.array(id_scores_test), np.array(ood_scores_test)),
-                        metrics=["auroc", "tpr5fpr"],
+                        metrics=["auroc", "tpr5fpr", "fpr95tpr"],
                     )
-                    auroc, tpr5 = m_test["auroc"], m_test["tpr5fpr"]
+                    auroc, tpr5, fpr95 = (
+                        m_test["auroc"],
+                        m_test["tpr5fpr"].item(),
+                        m_test["fpr95tpr"].item(),
+                    )
+                    ap = average_precision_score(
+                        np.concatenate(
+                            [
+                                np.zeros(len(id_scores_test)),
+                                np.ones(len(ood_scores_test)),
+                            ]
+                        ),
+                        np.concatenate([id_scores_test, ood_scores_test]),
+                    ).item()
                     run_metrics.append(
                         {
                             "group": grp,
                             "auroc_val": auroc_val,
-                            "tpr5_val": tpr5_val,
+                            "tpr5fpr_val": tpr5_val,
+                            "fpr95tpr_val": fpr95_val,
+                            "ap_score_val": ap_val,
                             "auroc": auroc,
                             "tpr5fpr": tpr5,
+                            "fpr95tpr": fpr95,
+                            "ap_score": ap,
                         }
                     )
 
@@ -427,9 +458,13 @@ def main():
                             id_scores=id_scores,
                             ood_scores=ood_scores,
                             auroc_val=auroc_val,
-                            tpr5_val=tpr5_val,
+                            tpr5fpr_val=tpr5_val,
+                            fpr95tpr_val=fpr95_val,
+                            ap_score_val=ap_val,
                             auroc=auroc,
                             tpr5fpr=tpr5,
+                            fpr95tpr=fpr95,
+                            ap_score=ap,
                         )
                     )
                     pd.DataFrame(records).to_parquet(out_file, index=False)

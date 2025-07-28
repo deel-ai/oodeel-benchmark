@@ -134,6 +134,21 @@ DATASETS_INFO = {
             "test": "./benchmark_imglist/imagenet200/train_imagenet800.txt",
         },
     },
+    # === IMAGENET FULL-SPECTRUM (with covariate shift) ===
+    "imagenet_fs": {
+        "num_classes": 1000,
+        "data_dir": "./images_largescale/",
+        "imglist_pth": {
+            "train": "./benchmark_imglist/imagenet/train_imagenet.txt",
+            "val": "./benchmark_imglist/imagenet/val_imagenet.txt",
+            "test": [
+                "./benchmark_imglist/imagenet/test_imagenet.txt",  # in-distribution
+                "./benchmark_imglist/imagenet/test_imagenet_r.txt",  # style changes
+                "./benchmark_imglist/imagenet/test_imagenet_c.txt",  # corruptions
+                "./benchmark_imglist/imagenet/test_imagenet_v2.txt",  # ImageNetV2
+            ],
+        },
+    },
 }
 
 
@@ -150,16 +165,36 @@ def get_dataset(
     if num_classes is None:
         num_classes = DATASETS_INFO[preprocessor_dataset_name]["num_classes"]
 
-    dataset = ImglistDataset(
-        name=dataset_name + "_" + split,
-        imglist_pth=os.path.join(
-            root_dir, DATASETS_INFO[dataset_name]["imglist_pth"][split]
-        ),
-        data_dir=os.path.join(root_dir, DATASETS_INFO[dataset_name]["data_dir"]),
-        num_classes=num_classes,
-        preprocessor=preprocessor,
-        data_aux_preprocessor=preprocessor,
-    )
+    # create dataset
+    if isinstance(DATASETS_INFO[dataset_name]["imglist_pth"][split], list):
+        imglist_pths = DATASETS_INFO[dataset_name]["imglist_pth"][split]
+        # one dataset per imglist_pth, then concatenate them
+        datasets = []
+        for imglist_pth in imglist_pths:
+            dataset = ImglistDataset(
+                name=dataset_name + "_" + split,
+                imglist_pth=os.path.join(root_dir, imglist_pth),
+                data_dir=os.path.join(
+                    root_dir, DATASETS_INFO[dataset_name]["data_dir"]
+                ),
+                num_classes=num_classes,
+                preprocessor=preprocessor,
+                data_aux_preprocessor=preprocessor,
+            )
+            datasets.append(dataset)
+        dataset = torch.utils.data.ConcatDataset(datasets)
+    else:
+        # single dataset
+        dataset = ImglistDataset(
+            name=dataset_name + "_" + split,
+            imglist_pth=os.path.join(
+                root_dir, DATASETS_INFO[dataset_name]["imglist_pth"][split]
+            ),
+            data_dir=os.path.join(root_dir, DATASETS_INFO[dataset_name]["data_dir"]),
+            num_classes=num_classes,
+            preprocessor=preprocessor,
+            data_aux_preprocessor=preprocessor,
+        )
     return dataset
 
 

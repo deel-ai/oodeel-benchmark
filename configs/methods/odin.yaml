@@ -2,7 +2,7 @@ class: ODIN
 
 base:
   temperature: [1, 10, 100, 1000]
-  noise: [0.0014, 0.0028]
+  eps: [0.0014, 0.0028]
 
 modes:
   - {} # "vanilla" ODIN
