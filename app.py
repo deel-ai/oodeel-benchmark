@@ -698,7 +698,8 @@ mode = st.sidebar.radio(
 tables = build_all_leaderboards(metric=metric, best_only=(mode == "Best per config"))
 df = tables[id_ds]
 eval_df = load_evals()
-eval_df = eval_df[eval_df["dataset"] == id_ds]
+id_ds_eval = id_ds.replace("imagenet_fs", "imagenet")  # imagenet_fs has same train IDs
+eval_df = eval_df[eval_df["dataset"] == id_ds_eval]
 
 st.sidebar.header("Filters")
 search = st.sidebar.text_input("Search")
